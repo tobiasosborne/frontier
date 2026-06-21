@@ -1,8 +1,14 @@
 {
-  "name": "frontier-controller",
+  "name": "frontier",
   "version": "0.2.0",
-  "description": "frontier (fr) — explore/exploit controller for an orchestrator LLM coordinating an agent swarm",
+  "description": "An explore/exploit controller for an orchestrator LLM: an append-only log + a derived FRONTIER/portfolio scoreboard injected via Claude Code hooks + a non-skippable circuit-breaker.",
   "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/tobiasosborne/frontier",
+  "repository": { "type": "git", "url": "git+https://github.com/tobiasosborne/frontier.git" },
+  "keywords": [
+    "llm", "ai-agents", "claude-code", "explore-exploit", "multi-agent", "orchestrator", "cli", "bun"
+  ],
   "bin": {
     "fr": "./src/index.ts"
   },
