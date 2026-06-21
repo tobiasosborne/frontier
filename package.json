@@ -1,0 +1,22 @@
+{
+  "name": "frontier-controller",
+  "version": "0.2.0",
+  "description": "frontier (fr) — explore/exploit controller for an orchestrator LLM coordinating an agent swarm",
+  "type": "module",
+  "bin": {
+    "fr": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build ./src/index.ts --compile --outfile dist/fr",
+    "install:global": "sh install.sh",
+    "latency": "bun run scripts/latency.ts",
+    "fr": "bun run src/index.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

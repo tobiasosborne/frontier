@@ -1,0 +1,14 @@
+{
+  "_comment": "Fallback hook wiring that does NOT need `fr` on PATH — it calls the per-project binary at $CLAUDE_PROJECT_DIR/.frontier/bin/fr. Use this variant if the hook shell's PATH doesn't include your global install. Otherwise prefer hooks/settings.json (global `fr`).",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "$CLAUDE_PROJECT_DIR/.frontier/bin/fr board --hook prompt" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "$CLAUDE_PROJECT_DIR/.frontier/bin/fr turn-begin && $CLAUDE_PROJECT_DIR/.frontier/bin/fr board --hook prompt" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "$CLAUDE_PROJECT_DIR/.frontier/bin/fr check --hook stop" }] }
+    ]
+  }
+}

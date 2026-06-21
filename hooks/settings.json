@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "fr board --hook prompt" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "fr turn-begin && fr board --hook prompt" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "fr check --hook stop" }] }
+    ]
+  }
+}

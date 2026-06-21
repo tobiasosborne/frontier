@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.raw
+*.log
+*.Zone.Identifier
+.DS_Store
+
+# In a DEPLOYED target project, the compiled binary and raw verdict logs are gitignored
+# (the append-only .frontier/log.jsonl itself IS committed — it is the campaign record):
+.frontier/bin/
+.frontier/verdicts/*.raw
+
+# agent tooling staged by plugins — not part of the tool
+.claude/

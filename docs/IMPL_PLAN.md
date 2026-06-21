@@ -1,0 +1,181 @@
+# Implementation plan — `fr` MVP
+
+Canonical spec: `docs/prd.md`. Working rules: `CLAUDE.md`. Type contract: `src/types.ts`.
+This doc is the architecture, the module APIs (implement to these signatures), the delegation DAG, and the
+TDD test matrix. MVP **includes the bank gate** (`fr verify` + G2b) — the anti-gaming close is core, not v1.1.
+
+## 1. Architecture (a pure core behind two thin edges)
+
+```
+              edges (impure)                         pure core (no FS/clock/env)
+  ┌─────────────────────────────────┐     ┌───────────────────────────────────────────┐
+  │ cli.ts / index.ts  (argv, exit) │ ──► │ derive.ts   log → DerivedState            │
+  │ store.ts   (.frontier/ I/O)     │ ──► │ referee.ts  DerivedState+turn → CheckResult│
+  │ oracle.ts  (run command oracle) │ ──► │ validate.ts write-time log validation     │
+  └─────────────────────────────────┘     │ board.ts    DerivedState → text + hookJSON │
+                                          └───────────────────────────────────────────┘
+```
+
+All clock/now values are injected from the edge (`now: string`) so the core stays deterministic (L4/Rule 5).
+
+## 2. Module APIs (implement exactly)
+
+### `src/store.ts` (impure — Pillar A)
+```ts
+export function resolveFrontierDir(env?: Record<string,string>, cwd?: string): string
+  // $CLAUDE_PROJECT_DIR/.frontier if set, else walk up from cwd to find .frontier/, else <cwd>/.frontier
+export function isActive(dir: string): boolean              // does dir/portfolio.json exist?
+export function readPortfolio(dir: string): Portfolio
+export function writePortfolio(dir: string, p: Portfolio): void   // pretty JSON
+export function readLog(dir: string): LogRecord[]           // [] if absent; one JSON object per line
+export function appendLog(dir: string, rec: LogRecord): void
+export function readTurn(dir: string): TurnState            // {log_len_at_turn_start:0,blocks_this_turn:0} if absent
+export function writeTurn(dir: string, t: TurnState): void
+export function readVerdicts(dir: string): Verdict[]        // from dir/verdicts/*.json; [] if absent
+export function writeVerdict(dir: string, v: Verdict): void // dir/verdicts/<claim>.<oracle>.json (claim slugified)
+```
+
+### `src/derive.ts` (PURE — Pillar A)
+```ts
+export function derive(p: Portfolio, log: LogRecord[], verdicts: Verdict[], stripLen?: number): DerivedState
+```
+Behaviour:
+- **Supersession:** a record `r` with `r.supersedes === c` retires the record at cycle `c` from the banked/active
+  view (it stays in the log; derivation just doesn't count the superseded one as live).
+- **Per arm**, over its pulls oldest→newest, tracking `runningFrontier` (starts at global `p.frontier` unless a
+  `frontier_after` reduces it):
+  - a pull **moves** (advances) iff `outcome ∈ {banked, progress, refuted}` **or** `frontier_after` is set and
+    differs from `runningFrontier`. **A `died`/`null` that merely renames the `at` residual does NOT move** —
+    anti-gaming: paraphrasing the residual must not reset the breaker (PRD §4.5). The `at` residual is the death
+    certificate (G5 / dead-routes / board), it does **not** drive staleness.
+  - `stale` resets to 0 on a moving pull, else `stale += 1`.
+  - update `runningFrontier` when `frontier_after` set.
+- `strip` = last `stripLen` (default 6) outcome glyphs, newest last.
+- `bestTier`/`bestClass` = best (lowest-numbered) tier ever reached by a progress/banked pull on the arm.
+- `distinctFamilies` = number of distinct model **families** among workers across the trailing stalling run
+  (run of pulls counted into `stale`). Family map: opus/sonnet/haiku/fable→`claude`; codex/gpt→`openai`;
+  gemini→`google`; else the raw model string.
+- `status`: `untried` (0 pulls) · `dead` (priority==="dead") · `stalled` (stale ≥ threshold) ·
+  `hot` (last pull banked/progress) · `warm` (last pull died with a new residual) · `cold` (otherwise).
+- `aggP` = mean of non-null `p_true` over the arm's pulls, else null.
+- **frontierTrail** = ordered distinct `frontier_after` values across the whole log, prefixed by the initial
+  `p.frontier` if different; `frontier` (current) = last trail entry.
+- **deadRoutes** = every `refuted` record (residual = target) + every `died` record whose arm later switched
+  away from that residual (terminal death), keyed/deduped by residual; carry `killedAtCycle`/`killedByWave`.
+  MVP simplification: include all `refuted` + all `died` records, dedupe by `residual`, newest wins.
+- **banked** = records with `outcome==="banked"`; `verified` = exists a verdict with `result==="pass"` whose
+  `claim===artifact` and which is not stale (see oracle §). Superseded banked entries are excluded.
+
+### `src/referee.ts` (PURE — Pillar B)
+```ts
+export function check(state: DerivedState, turn: TurnState, log: LogRecord[],
+                      p: Portfolio, verdicts: Verdict[]): CheckResult
+```
+Let `newThisTurn = log.slice(turn.log_len_at_turn_start)` and `newest = log[log.length-1]`. Gates, in order;
+the FIRST failing gate determines the result. If `turn.blocks_this_turn >= p.config.max_blocks_per_turn`,
+return `{status:"soft", ...}` (with the gate/reason) **instead of** `{status:"block"}` (loop guard).
+- **G1 logged-this-turn:** `newThisTurn.length === 0` → block "No wave outcome logged this turn. Record it with `fr log …`."
+- **G5 died-needs-residual:** any `r∈newThisTurn` with `r.outcome==="died" && !r.at` → block.
+- **G2 progress/banked-backed:** any `r∈newThisTurn` with `r.outcome∈{progress,banked}` and no resolvable
+  artifact (`!r.evidence?.artifact`) → block.
+- **G_launder anti-laundering:** any `r∈newThisTurn` with `r.outcome==="refuted"` and `r.evidence?.verdict==="banked"` → block.
+- **G2b banked-verified:** any `r∈newThisTurn` with `r.outcome==="banked"` lacking a passing non-stale verdict
+  (no `verdicts` entry with `result==="pass" && claim===r.evidence.artifact` that is current) → block
+  "`▣ banked` needs an audit verdict from an oracle other than the author. Run `fr verify` or downgrade to `△`."
+- **G3 breaker:** let `arm = newest.arm`, `d = newest.decision`, `s = state.arms.find(a=>a.id===arm)`. If
+  `s.stale >= p.config.stale_threshold` (tripped) and the decision is not an escape — i.e. NOT
+  (`d.type==="EXPLORE" && d.arm!==arm`) and NOT (`d.type==="PIVOT"`) → block
+  "Arm <arm>'s residual has survived <k> frontier-non-moving pulls. Next cycle must EXPLORE a different arm or PIVOT."
+- **G4 ends-on-decision:** `!newest.decision` → block "End the turn on EXPLOIT|EXPLORE|PIVOT <arm>."
+- else `{status:"pass"}`.
+
+### `src/validate.ts` (PURE — Pillar B)
+```ts
+export function validateLog(p: Portfolio, state: DerivedState, rec: LogRecord, verdicts: Verdict[]): ValidationResult
+```
+Write-time rejects (immediate feedback, PRD §6) — mirror the relevant gates so the model is told at `fr log`
+time, not only at `Stop`:
+- died without `at`; progress/banked without `evidence.artifact`; banked without a passing non-stale verdict;
+  refuted with `evidence.verdict==="banked"` (launder); unknown arm id; missing decision; a decision whose
+  `arm` is not a registered arm; **breaker tripped** (the record's arm is `stalled` in `state`) and the
+  decision is not an escape (EXPLORE-different / PIVOT).
+
+### `src/board.ts` (PURE — Pillar C)
+```ts
+export function renderBoard(state: DerivedState, opts?: {maxArms?: number; maxDead?: number}): string
+export function promptHook(text: string, event?: "UserPromptSubmit"|"SessionStart"): PromptHookOutput
+export function stopPass(): StopHookOutput                 // {}
+export function stopBlock(reason: string): StopHookOutput  // {decision:"block",reason}
+export function stopSoft(text: string): StopHookOutput     // hookSpecificOutput additionalContext
+```
+Board layout per PRD §8 (FRONTIER + OPEN + trail · BANKED · ARMS one line each · DEAD ROUTES tail).
+**Factual phrasing only** — no imperative verbs ("must", "switch now", "you should"); a test asserts this.
+Untried arms render `??`. Token budget: cap arms at `maxArms` (default all, but truncate notes) and dead
+routes at `maxDead` (default 6).
+
+### `src/oracle.ts` (impure — Pillar C)
+```ts
+export function runOracle(claim: string, oracle: {name:string; cmd:string[]; inputs?:string[]},
+                          claimText: string, now: string): Verdict
+```
+Runs `cmd` (argv, **no shell**) with `claimText` on stdin; exit 0 → pass, non-zero → fail, spawn error → error.
+Writes nothing itself (the CLI persists via `store.writeVerdict`). Computes `claim_hash` (sha256 of claimText),
+`oracle_digest` (sha256 of cmd joined), `inputs_hash` (sha256 of inputs file contents or ""). **Staleness** is a
+pure predicate the referee/derive use: a verdict is current iff its three hashes still match the live claim,
+oracle, and inputs. For MVP, expose `export function isStale(v: Verdict, claimText: string): boolean` (recompute
+claim_hash and compare) — oracle/inputs digests are recorded for future re-check.
+
+### `src/cli.ts` + `src/index.ts` (impure — Pillar C)
+Dispatch (all `now = new Date().toISOString()` injected here):
+- `init "<goal>"` → write portfolio.json (default config, empty arms, frontier="<goal>").
+- `arm add <id> "<desc>" [--priority p] [--target t] [--kill k]`
+- `arm set <id> [--priority p] [--target t] [--kill k]`
+- `frontier "<text>"` → set portfolio.frontier (the live open).
+- `log <arm> <outcome> "<note>" [--at r] [--artifact ref] [--class c] [--tier t] [--worker model:role]... [--p-true x] [--p-audit y] --decide <TYPE> <next-arm>`
+  → build LogRecord, run `validateLog`; on `!ok` print error to stderr + exit 1; else `appendLog`, set
+  `frontier_after` if `--frontier` given (optional), print a one-line confirmation.
+- `verify <claim> --oracle <name>` → look up oracle in portfolio.config (or a `verify` block); run, persist verdict, print result.
+- `board [--hook prompt]` → derive + render; with `--hook prompt` print `promptHook(text)` JSON only.
+- `check [--hook stop]` → derive + check; with `--hook stop`: print Stop JSON (`stopPass`/`stopBlock`/`stopSoft`)
+  and exit 0; on block increment `turn.blocks_this_turn`. **Fail closed:** wrap in try/catch — if `isActive` and
+  anything throws, print `stopBlock("frontier check failed: <msg>")`; if `!isActive`, print `{}` exit 0 (inert).
+- `turn-begin` → stamp turn.json `{log_len_at_turn_start: readLog().length, blocks_this_turn: 0}`. JSON-silent.
+- `status` → human-readable summary (NOT hook-wrapped).
+- Global: hook subcommands print **only** JSON to stdout; everything else (errors, status) is fine on stdout/stderr
+  but hook paths must never leak non-JSON to stdout.
+
+## 3. Delegation DAG (one session)
+
+```
+[me] scaffold + types.ts + this plan        ✔ done
+        │
+        ├──► Pillar A (agent)  store.ts + derive.ts        + test/store.test.ts test/derive.test.ts
+        ├──► Pillar B (agent)  referee.ts + validate.ts    + test/referee.test.ts test/validate.test.ts
+        │        (A ∥ B — disjoint files, both import types.ts only)
+        ▼
+     Pillar C (agent)  board.ts + oracle.ts + cli.ts + index.ts + scripts/latency.ts
+                       + test/board.test.ts test/integration.test.ts   (imports A+B)
+        ▼
+[me] integrate · bun test (full) · bun run build · bun run latency · acceptance §14 · report
+```
+**File ownership is disjoint** — no two agents touch the same file. Every agent: import from `src/types.ts`
+only; do **red-green TDD** (failing test first, show RED then GREEN, perturb a load-bearing test to RED then
+restore); run `bun test <their files>` and report pass counts + any perturbation evidence.
+
+## 4. TDD test matrix (maps to PRD §14)
+
+| Test file | Asserts | PRD §14 |
+|---|---|---|
+| `derive.test.ts` | staleness increments on every non-frontier-reducing died/null (incl. the first); **resets** on a FRONTIER reduction (`frontier_after`) / progress / refuted; **does NOT reset** on a residual paraphrase; `strip`; `bestTier`; `distinctFamilies`; untried→`??` status; frontierTrail order; deadRoutes dedupe; banked `verified` flag; supersession removes a banked entry | 2, 6, 8 |
+| `referee.test.ts` | G1 (nothing logged) · G2 (progress no artifact) · **G2b** (banked no verdict; verdict present→pass) · G3 breaker fires on stale+EXPLOIT, **passes** on EXPLORE-different / PIVOT, **passes** when a new residual reset stale · G4 · G5 · anti-launder · loop guard (≥max → soft not block) | 2, 5, 7 |
+| `validate.test.ts` | each write-time reject (died/artifact/banked-verdict/launder/unknown-arm/breaker-tripped) | 3, 4 |
+| `board.test.ts` | renders FRONTIER+trail, glyph strip, `??` for untried, dead-routes tail; **no imperative phrasing** (regex bans "must"/"switch now"/"you should"); `promptHook` shape is exact | 6, 7 |
+| `store.test.ts` | round-trip portfolio/log/turn/verdicts in a temp dir; append-only; `resolveFrontierDir` env/cwd; `isActive` | — |
+| `integration.test.ts` | spawn the CLI (`bun run src/index.ts`) against a temp `.frontier/`: the full §14 unit script 1–8 end-to-end, incl. fail-closed (`check` blocks when `.frontier` corrupt; `{}` when absent) | 1–8 |
+| `scripts/latency.ts` | build the binary, time `board`+`check` cold start, assert < 50 ms | 9 |
+
+## 5. Acceptance (definition of done for the session)
+`bun test` green (all files) · `bun run build` produces `dist/fr` · `bun run latency` < 50 ms · the §14 unit
+script 1–8 pass via integration · a `hooks/settings.json` snippet (PRD §9) + a short `README` deploy note exist.
+Live hook test (§14 #10–12) is out of this session (needs a Claude Code session in a target repo) — leave a
+documented manual checklist.
