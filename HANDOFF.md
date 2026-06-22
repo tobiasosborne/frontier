@@ -1,6 +1,7 @@
 # HANDOFF — `frontier` (`fr`)
 
-> **Status:** MVP **complete, green, and dogfood-validated.** Last session: 2026-06-21 (build + dogfood + polish).
+> **Status:** MVP **complete, green, dogfood-validated**; the **discovery ledger + fork** feature
+> (`docs/prd-discovery.md`, phases D1–D3) is **built and green** on top. Last session: 2026-06-22 (discovery feature).
 > **Read order for a new agent:** this file → `CLAUDE.md` (the Laws) → `docs/prd.md` (WHAT) →
 > `docs/IMPL_PLAN.md` (module APIs) → `src/types.ts` (the contract). Then `bun test` and skim `src/derive.ts`.
 
@@ -20,8 +21,16 @@ frontier-stall breaker is respected. Everything else is light ceremony (`fr log`
 
 ## 1. Current state
 
-- **136 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
-  ≈ **25 ms** for `board`/`check` (50 ms budget). **`fr` installed globally** at `~/.local/bin/fr` (on PATH).
+- **169 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
+  board ≈44 ms / check ≈47 ms (50 ms budget). **`fr` installed globally** at `~/.local/bin/fr` (on PATH).
+- **Discovery ledger + fork (built this session, `docs/prd-discovery.md`).** A sixth outcome `discovery ⟡`
+  (`fr discover "<obs>" --question "…"`) gives off-goal results a **breaker-neutral** channel (off-arm, so the
+  per-arm `stale` walk skips it). Derived `discoveries` ledger with signals **reuse** (distinct citing arms),
+  **⟲ learning-progress**, **surprise**; status `parked → promoted-arm → forked → decayed`. Promote with
+  `fr arm add <id> --from-discovery <c>` (Rung 2) or `fr fork <c> --goal --frontier` (Rung 3 — gated by GF:
+  stateable new frontier + reuse≥2 or learning-progress; scaffolds a child `.frontier/`, prepares-not-launches).
+  Decisions A/B taken as proposed defaults; **C deferred** (no §15.1 change). The board shows only PARKED
+  discoveries (decay/promotion hide, never delete).
 - **Feature-complete MVP:** `init · arm add/set · frontier · log · verify · board · check · turn-begin · status ·
   help`; five outcomes `▣ banked / △ progress / ✗ died / ⊘ refuted / — null`; evidence class+tier+workers+P;
   the **bank gate** (`fr verify` oracle + hash-bound verdicts); the **frontier-stall breaker** + `PIVOT`;
@@ -102,6 +111,12 @@ nudges the next step. Source: `src/help.ts`.
 
 ## 5. What's NOT done (pick up here)
 
+- **Discovery feature — canonical fold-in (on acceptance).** D1–D3 are built/green and documented in
+  `docs/prd-discovery.md` (the spec) + `IMPL_PLAN.md` §6–8. On acceptance, fold it into the **canonical
+  `docs/prd.md`** (§4 model, §5 data model, §6 CLI, §7 referee, §15) and add one `fr discover` line to the
+  `CLAUDE.md` model-side ritual. Deferred: **Decision C** (the `progress`-resets-breaker tightening) — held as
+  a ready drop-in, flip on only if a real campaign shows persistent progress-theatre (the D2 reuse /
+  learning-progress signals instrument it). Not yet exercised in a **live** Claude Code session.
 - **The tool repo is public** at `github.com/tobiasosborne/frontier` (AGPL-3.0). The `../npt-bound-entanglement`
   dogfood repo is still local-only (separate decision — it's a research campaign, not the tool).
 - **Live hook test (PRD §14 #10–12).** Cannot be done headless — needs a Claude Code session **rooted in a
