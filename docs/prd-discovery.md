@@ -23,8 +23,10 @@ append-only-truth model.
 >    derived from the log, never stored (L2). (§4.2–4.3)
 > 4. **A three-rung promotion ladder:** park → promote-to-arm (same goal, liberal) → fork-to-goal (new
 >    campaign, gated and deliberately expensive). (§4.4–4.5)
-> 5. **An anti-progress-theatre tightening** of the existing `progress △` reset rule, grounded in the
->    learning-progress result (F7). **Touches a locked decision (canonical §15.1) — needs sign-off.** (§4.6, §12)
+> 5. **An anti-progress-theatre tightening** of the existing `progress △` reset rule (grounded in
+>    learning-progress, F7) is **specified but deferred** (Decision C, resolved 2026-06-22): D2 *instruments*
+>    progress-theatre via the reuse/learning-progress signals; the enforcement change is left off until/unless
+>    the data shows it as a persistent failure mode. **No locked-decision change in this PRD.** (§4.6, §12)
 
 ---
 
@@ -176,10 +178,14 @@ exposes a residual hole: today `progress △` resets the breaker (`MOVING_OUTCOM
 refuted}`), yet `progress` needs only a self-cited artifact — so repeated thin `progress` can perpetually
 reset discipline without moving the open.
 
-**Proposed tightening (Decision C, §12):** a `progress` pull resets the breaker **only** if it records a
-`frontier_after` reduction **or** is later `--cites`-reused (learning-progress); a `progress` that does
-neither still logs as `△` but **no longer counts as movement** for the breaker. This is a behavior change to a
-locked decision (canonical §15.1) and is presented for sign-off, not assumed.
+**Specified-but-deferred tightening (Decision C, resolved 2026-06-22 — defer):** *if* triggered, a `progress`
+pull would reset the breaker **only** if it records a `frontier_after` reduction **or** is later
+`--cites`-reused (learning-progress); a `progress` that does neither still logs as `△` but **no longer counts
+as movement** for the breaker. This is a behavior change to a locked decision (canonical §15.1), so it is
+**not** shipped now. **Instrument before enforce:** D2's reuse + learning-progress signals make theatre
+*observable* — a run of breaker-resetting `progress` pulls with zero reuse and no `frontier_after` is its
+measurable signature — so the rule above is held as a ready drop-in and flipped on only if that pattern
+persists in a real campaign.
 
 ## 5. Data model (deltas to canonical §5 / `src/types.ts`)
 
@@ -267,7 +273,8 @@ DISCOVERIES (off-goal, parked):
 - **D2 — promotion + signals.** `fr arm add --from-discovery` (Rung 2); learning-progress + surprise signals;
   decay policy (Decision B). 
 - **D3 — fork.** `fr fork`, GF, child scaffolding + provenance, the parent supersession record. The
-  anti-theatre `progress` tightening (Decision C) lands here or as its own change.
+  anti-theatre `progress` tightening (Decision C) is **deferred, not part of D3** — held as a ready drop-in,
+  flipped on only if instrumentation shows persistent progress-theatre.
 
 ## 11. Acceptance / smoke test (TDD, L1 — failing test first, perturb load-bearing gates)
 **Unit (no LLM):**
@@ -294,9 +301,12 @@ DISCOVERIES (off-goal, parked):
   (canonical §4.6) — a `T2/stated` discovery with `reuse 0` ages to `status:decayed` (drops off the board tail
   after N cycles), a `banked`-grade one is sticky. The archive (F5) argues *never delete* — decay only changes
   **surfacing**, the record stays in the log. *(Alternative: keep all discoveries on the board forever.)*
-- **C — fold in the `progress`-resets-breaker tightening (§4.6)?** *Proposed:* yes, in D3. **This edits a
-  locked decision (canonical §15.1)** and is therefore a CLAUDE.md stop-condition — flagged for explicit TJO
-  sign-off, grounded in F7. *(Alternative: keep it a separate, later change.)*
+- **C — fold in the `progress`-resets-breaker tightening (§4.6)?** **Resolved 2026-06-22 — DEFER, no change.**
+  Progress-theatre is not (yet) a demonstrated failure mode, and editing a locked decision (canonical §15.1)
+  speculatively isn't warranted; canonical §15.1 is **untouched**. The §4.6 rule is held as a ready drop-in.
+  **Trigger to revisit:** D2's reuse + learning-progress signals instrument theatre directly — if a real
+  campaign shows a persistent run of breaker-resetting `progress` pulls with zero reuse and no `frontier_after`
+  reduction, flip the rule on then (grounded in F7). Instrument first, enforce only on evidence.
 
 On acceptance, this PRD folds into the canonical PRD (§4 model, §5 data model, §6 CLI, §7 referee, §13
 phasing, §15 locked decisions) and the model-side ritual in `CLAUDE.md` gains one line for `fr discover`.
