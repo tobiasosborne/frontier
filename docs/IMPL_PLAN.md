@@ -244,3 +244,24 @@ board; the log record stays).
 | `derive.test.ts` | `learningProgress` true only when a citing pull moves; `surprise` on low-prior+artifact; `status` promoted-arm / decayed (T0 sticky, reuse-0 + old) |
 | `board.test.ts` | `⟲` for learning-progress; only PARKED discoveries surface (decayed/promoted hidden) |
 | `integration.test.ts` | `fr arm add P --from-discovery <c>` seeds the arm + promotes it off the parked tail; nonexistent cycle rejected |
+
+## 8. D3 — fork-to-goal (built)
+
+Spec: `docs/prd-discovery.md` §4.5 / §10 (D3). The expensive, gated Rung-3 promotion: a discovery
+spins into its own campaign (a new `.frontier/`), not a multi-goal parent.
+
+- **`types.ts`** — `Portfolio.forked_from?: ForkedFrom`; `LogRecord.fork_of?` (the inert fork-marker).
+- **`validate.ts`** — pure `validateFork(disc, goal, frontier)` = **GF** (Decision A): stateable new
+  frontier + new goal + (`reuse ≥ K_FORK=2` **or** learning-progress).
+- **`derive.ts`** — a live record with `fork_of` adds to `forkedCycles` and is skipped as a ledger entry;
+  status precedence becomes **forked > promoted-arm > decayed > parked**.
+- **`commands.ts`** — `fr fork <cycle> --goal --frontier [--dest] [--first-arm id:"desc"]`: checks GF,
+  scaffolds `<dest>/.frontier/` (copied config, seeded goal/frontier/+arm, `forked_from` provenance,
+  inherited cites by reference, fresh log), appends the parent fork-marker. **Prepares, never launches**
+  (the FS scaffolding is the only impure work — an edge op, like `fr init`; core stays pure, L4).
+
+| Test file | Asserts (D3) |
+|---|---|
+| `validate.test.ts` | `validateFork` rejects no-discovery / no-goal / no-frontier / under-threshold; accepts at reuse≥2 or learning-progress |
+| `derive.test.ts` | a `fork_of` marker sets the discovery `status:"forked"` and is not itself a ledger entry |
+| `integration.test.ts` | an ineligible discovery is refused (no child created); an eligible one scaffolds a child `.frontier/portfolio.json` with `forked_from` + a FRESH log, and drops off the parent's parked board |

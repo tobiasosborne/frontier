@@ -140,9 +140,14 @@ function deriveDiscoveries(
   const promotedCycles = new Set<number>();
   for (const a of arms) if (a.from_discovery != null) promotedCycles.add(a.from_discovery);
 
+  // fork-markers (records carrying `fork_of`) record that a discovery became a child campaign.
+  const forkedCycles = new Set<number>();
+  for (const r of log) if (isLive(r) && r.fork_of != null) forkedCycles.add(r.fork_of);
+
   const out: Discovery[] = [];
   for (const r of log) {
     if (r.outcome !== "discovery" || !isLive(r)) continue;
+    if (r.fork_of != null) continue; // a fork-marker is not itself a ledger entry
     const artifact = r.evidence?.artifact ?? null;
     const tier = r.evidence?.tier ?? null;
 
@@ -166,10 +171,12 @@ function deriveDiscoveries(
     // relevant — F6). Advisory only, never gates.
     const surprise = artifact != null && r.p_true != null && r.p_true <= SURPRISE_PRIOR;
 
-    // status (Decision A/B): promoted-arm (an arm seeded from it) outranks decay; a parked,
-    // reuse-0, non-T0 discovery older than the decay window ages off the board tail.
+    // status: forked (became a child campaign) > promoted-arm (seeded an arm) > decayed
+    // (parked, reuse-0, non-T0, aged past the window — Decision B) > parked.
     let status: Discovery["status"];
-    if (promotedCycles.has(r.cycle)) {
+    if (forkedCycles.has(r.cycle)) {
+      status = "forked";
+    } else if (promotedCycles.has(r.cycle)) {
       status = "promoted-arm";
     } else if (reuse === 0 && tier !== "T0" && currentCycle - r.cycle >= DECAY_AFTER_CYCLES) {
       status = "decayed";

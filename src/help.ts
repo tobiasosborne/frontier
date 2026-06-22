@@ -21,7 +21,7 @@ THE PER-TURN RITUAL (this is the whole protocol):
     ▣ banked (needs \`fr verify\`)  △ progress (needs --artifact)  ✗ died (needs --at)
     ⊘ refuted  — null
 
-COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  verify  board  check  turn-begin  status  help
+COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  fork  verify  board  check  turn-begin  status  help
 CONCEPTS  (\`fr help <topic>\`): workflow  outcomes  breaker  bank-gate  evidence  arms  frontier  discovery  oracles  hooks
 
 The board (injected each turn) is your live FRONTIER + portfolio scoreboard + dead routes.`;
@@ -64,6 +64,15 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   (Platt's "The Question": what would falsify it / why it matters) and is the bar for promotion.
   A discovery is class=stated until externally checked. Later arm-pulls that --cites its artifact
   raise its cross-thread "reuse" on the board.  (\`fr help discovery\`)`,
+
+  fork: `fr fork <cycle> --goal "<new goal>" --frontier "<new reducible open>" \\
+       [--dest <path>] [--first-arm <id>:"<desc>"]
+  Spin a parked discovery into its OWN campaign — a new .frontier/ at <dest> (default: a sibling
+  dir from the goal slug). Deliberately expensive and GATED (GF): the discovery must have a
+  stateable new --frontier AND reuse ≥ 2 OR learning-progress (not raw surprise). Copies the rig
+  (oracles/thresholds), seeds goal+frontier (+optional first arm), stamps forked_from provenance,
+  and inherits cited artifacts BY REFERENCE (the child re-banks via its own oracle). fr PREPARES
+  the fork; it does not launch it — open a new session rooted at <dest>.  (\`fr help discovery\`)`,
 
   verify: `fr verify <claim> --oracle <name>
   Run a registered oracle (argv, NO shell; claim text on stdin) → a PASS/FAIL verdict, the
@@ -141,8 +150,9 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   SIGNALS on the board: reuse×N (distinct DIFFERENT arms citing it via --cites — the promotion
   bar), ⟲ (learning-progress: a citing pull MOVED the frontier), surprise (landed despite a low
   --p-true). A reuse-0, low-tier discovery decays off the board after a while (the record stays).
-  PROMOTE: \`fr arm add <id> --from-discovery <cycle>\` turns it into a new arm (same goal).
-  (\`fr help breaker\`, \`fr help arm\`)`,
+  PROMOTE: \`fr arm add <id> --from-discovery <cycle>\` turns it into a new arm (same goal); or
+  \`fr fork <cycle> --goal … --frontier …\` spins it into its OWN campaign (a new workspace) once
+  it has reuse ≥ 2 or learning-progress.  (\`fr help breaker\`, \`fr help arm\`, \`fr help fork\`)`,
 
   arms: `ARMS (the portfolio)
   Each arm is one approach, with a priority (primary/exploratory/support/background/logged/dead

@@ -30,7 +30,7 @@ import {
 } from "./store";
 import { derive } from "./derive";
 import { check } from "./referee";
-import { validateLog, validateDiscover } from "./validate";
+import { validateLog, validateDiscover, validateFork } from "./validate";
 import { renderBoard, promptHook, stopPass, stopBlock, stopSoft } from "./board";
 import { runOracle, currentVerdicts } from "./oracle";
 import { out, err, parseArgs } from "./cliutil";
@@ -302,6 +302,101 @@ function buildDiscovery(
     wave: flags.wave,
     cites: cites.length ? cites : undefined,
   };
+}
+
+// ── fork (D3: promote a discovery into a NEW campaign) ──────────────────────────
+
+export function cmdFork(dir: string, rest: string[], now: string): number {
+  const { pos, flags } = parseArgs(rest);
+  const cycleArg = pos[0];
+  if (!cycleArg) {
+    err('usage: fr fork <cycle> --goal "<new goal>" --frontier "<new open>" [--dest <path>] [--first-arm <id>:"<desc>"]');
+    return 1;
+  }
+  if (!isActive(dir)) {
+    err("no .frontier/ here — run `fr init \"<goal>\"`.");
+    return 1;
+  }
+  const cycle = Number(cycleArg);
+  const p = readPortfolio(dir);
+  const log = readLog(dir);
+  const state = derive(p, log, liveVerdicts(dir));
+  const disc = state.discoveries.find((d) => d.cycle === cycle);
+  const goal = flags.goal ?? "";
+  const frontier = flags.frontier ?? "";
+
+  // GF — fork eligibility (pure). prd-discovery §4.5 / §12 Decision A.
+  const elig = validateFork(disc, goal, frontier);
+  if (!elig.ok) {
+    err(elig.error ?? "rejected");
+    return 1;
+  }
+  const d = disc!; // defined past the eligibility check
+
+  // dest: explicit --dest (abs or project-relative), else a sibling dir from the goal slug.
+  const projectRoot = path.dirname(dir);
+  const dest = flags.dest
+    ? path.isAbsolute(flags.dest)
+      ? flags.dest
+      : path.join(projectRoot, flags.dest)
+    : path.join(path.dirname(projectRoot), slug(goal));
+  const childFrontier = path.join(dest, ".frontier");
+  if (fs.existsSync(childFrontier)) {
+    err(`destination already has a .frontier/: ${childFrontier}. Pick another --dest.`);
+    return 1;
+  }
+
+  // inherited dependencies — BY REFERENCE (the child re-banks via its own oracle). Snapshot, not a link.
+  const discRec = log.find((r) => r.outcome === "discovery" && r.cycle === cycle);
+  const inherits = [discRec?.evidence?.artifact ?? null, ...(discRec?.cites ?? [])].filter(
+    (x): x is string => !!x,
+  );
+
+  // optional seed arm: --first-arm id:"<desc>"
+  const arms: Portfolio["arms"] = [];
+  if (flags["first-arm"]) {
+    const idx = flags["first-arm"].indexOf(":");
+    const id = idx >= 0 ? flags["first-arm"].slice(0, idx) : flags["first-arm"];
+    const fdesc = idx >= 0 ? flags["first-arm"].slice(idx + 1) : "";
+    arms.push({ id, desc: fdesc || d.observation, priority: "primary", target: frontier, kill: null, created: new Date(0).toISOString() });
+  }
+
+  const child: Portfolio = {
+    goal,
+    frontier,
+    config: { ...p.config }, // copy the rig (oracles / thresholds)
+    arms,
+    forked_from: { repo: projectRoot, goal: p.goal, cycle, discovery: d.artifact ?? d.observation, inherits },
+  };
+
+  fs.mkdirSync(childFrontier, { recursive: true });
+  writePortfolio(childFrontier, child); // fresh campaign; no log.jsonl until its first pull
+
+  // parent: an INERT fork-marker (outcome discovery + fork_of, no decision) so the discovery
+  // derives status "forked" — genealogy survives on BOTH sides, neither log mutates (L2).
+  const marker: LogRecord = {
+    ts: now,
+    cycle: log.reduce((m, r) => Math.max(m, r.cycle), 0) + 1,
+    arm: null,
+    target: null,
+    outcome: "discovery",
+    at: null,
+    note: `promoted → fork: ${dest}`,
+    evidence: null,
+    workers: [],
+    decision: null,
+    fork_of: cycle,
+  };
+  appendLog(dir, marker);
+
+  out(`forked discovery #${cycle} → ${childFrontier}`);
+  out(`next: open a NEW Claude Code session rooted at ${dest} — its own orchestrator. fr prepared the fork; it does not launch it.`);
+  return 0;
+}
+
+/** A filesystem-safe slug of a goal string, for the default fork destination. */
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "fork";
 }
 
 // ── verify (the bank gate's only execution path) ───────────────────────────────

@@ -13,11 +13,15 @@
 import type {
   DecisionType,
   DerivedState,
+  Discovery,
   LogRecord,
   Portfolio,
   ValidationResult,
   Verdict,
 } from "./types";
+
+/** Decision A (prd-discovery §12): a discovery is fork-eligible at this much cross-thread reuse. */
+const K_FORK = 2;
 
 /** A decision escapes a tripped breaker iff it EXPLOREs a different arm or PIVOTs. */
 function isEscape(type: DecisionType, decisionArm: string, currentArm: string | null): boolean {
@@ -45,6 +49,35 @@ export function validateDiscover(rec: LogRecord): ValidationResult {
   if (!rec.question || !rec.question.trim()) {
     return reject(
       'A discovery needs --question "<what would falsify this / why it matters>" (Platt\'s The Question). (`fr help discovery`)',
+    );
+  }
+  return { ok: true };
+}
+
+/**
+ * GF — fork eligibility (prd-discovery §4.5 / §12 Decision A). A discovery may seed a NEW campaign
+ * only with (a) a stateable new frontier, (b) a new goal, and (c) enough interestingness:
+ * cross-thread `reuse ≥ K_FORK` OR demonstrated learning-progress (NOT raw surprise). PURE.
+ */
+export function validateFork(
+  disc: Discovery | undefined,
+  goal: string,
+  frontier: string,
+): ValidationResult {
+  if (!disc) {
+    return reject("No such parked discovery to fork. Check `fr board` / `fr status`.");
+  }
+  if (!goal || !goal.trim()) {
+    return reject('A fork needs a new --goal "<the child campaign\'s goal>".');
+  }
+  if (!frontier || !frontier.trim()) {
+    return reject(
+      'A fork needs a stateable new --frontier "<a reducible open>" — if you cannot state one, it is not a goal yet; promote-to-arm instead. (`fr help discovery`)',
+    );
+  }
+  if (!(disc.reuse >= K_FORK || disc.learningProgress)) {
+    return reject(
+      `Discovery #${disc.cycle} is not fork-eligible: reuse ${disc.reuse} (need ≥ ${K_FORK}) and no learning-progress. Promote-to-arm or accrue cross-thread reuse first. (\`fr help discovery\`)`,
     );
   }
   return { ok: true };

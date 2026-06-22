@@ -92,6 +92,8 @@ export interface LogRecord {
   question?: string;
   /** Artifact refs this pull/discovery builds on — drives the cross-thread `reuse` signal. prd-discovery §4.3. */
   cites?: string[];
+  /** cycle of the discovery this record forked into a new campaign — an inert fork-marker. prd-discovery §4.5. */
+  fork_of?: number;
 }
 
 export interface ArmConfig {
@@ -119,11 +121,22 @@ export interface Config {
   oracles?: OracleConfig[];
 }
 
+/** Provenance stamped on a forked child campaign (prd-discovery §4.5). Snapshot, not a live link. */
+export interface ForkedFrom {
+  repo: string; // parent project root
+  goal: string; // parent goal
+  cycle: number; // the discovery cycle that seeded this campaign
+  discovery: string | null; // the seeding discovery's artifact or observation
+  inherits: string[]; // cited artifact refs inherited BY REFERENCE (child re-banks via its own oracle)
+}
+
 export interface Portfolio {
   goal: string;
   frontier: string; // the single live named open (current)
   config: Config;
   arms: ArmConfig[];
+  /** Set only on a child campaign materialised by `fr fork` (prd-discovery §4.5). */
+  forked_from?: ForkedFrom;
 }
 
 /** Ephemeral per-turn state stamped by `turn-begin`, diffed by `check`. PRD §5. */

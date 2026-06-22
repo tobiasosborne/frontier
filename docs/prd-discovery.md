@@ -272,7 +272,7 @@ DISCOVERIES (off-goal, parked):
   breaker-neutrality, the derived ledger, the board block, G1 fix. Signals: **reuse** only.
 - **D2 — promotion + signals. ✅ built.** `fr arm add --from-discovery` (Rung 2); learning-progress + surprise
   signals; decay policy (Decision B).
-- **D3 — fork.** `fr fork`, GF, child scaffolding + provenance, the parent fork-marker record. The
+- **D3 — fork. ✅ built.** `fr fork`, GF, child scaffolding + provenance, the parent fork-marker record. The
   anti-theatre `progress` tightening (Decision C) is **deferred, not part of D3** — held as a ready drop-in,
   flipped on only if instrumentation shows persistent progress-theatre.
 

@@ -350,3 +350,45 @@ describe("D2 promote-to-arm", () => {
     expect(add.stderr.toLowerCase()).toContain("discovery");
   });
 });
+
+// ── D3: fork-to-goal ─────────────────────────────────────────────────────────
+
+describe("D3 fork", () => {
+  test("an ineligible discovery (low reuse, no learning-progress) cannot be forked", () => {
+    init();
+    beginTurn();
+    fr("discover", "an early idea", "--question", "q", "--artifact", "obs/x");
+    const res = fr("fork", "1", "--goal", "a new goal", "--frontier", "(NG) one open", "--dest", path.join(projDir, "child"));
+    expect(res.code).toBe(1);
+    expect(res.stderr.toLowerCase()).toMatch(/reuse|eligible|learning/);
+    expect(fs.existsSync(path.join(projDir, "child", ".frontier"))).toBe(false);
+  });
+
+  test("an eligible discovery forks: scaffolds a child .frontier/ with provenance, drops off the parent board", () => {
+    init();
+    beginTurn();
+    fr("discover", "a load-bearing lemma", "--question", "q", "--artifact", "obs/lem", "--class", "side", "--tier", "T1");
+    // reuse across two distinct arms → reuse 2 → fork-eligible (Decision A)
+    fr("log", "A", "died", "used it", "--at", "R1", "--cites", "obs/lem", "--decide", "EXPLOIT", "A");
+    fr("log", "B", "died", "used it too", "--at", "R2", "--cites", "obs/lem", "--decide", "EXPLOIT", "B");
+
+    const dest = path.join(projDir, "child-fork");
+    const res = fr("fork", "1", "--goal", "classify stochastic-diagonal idempotents", "--frontier", "(SD) one classification", "--dest", dest);
+    expect(res.code).toBe(0);
+
+    const childPortfolioPath = path.join(dest, ".frontier", "portfolio.json");
+    expect(fs.existsSync(childPortfolioPath)).toBe(true);
+    const cp = JSON.parse(fs.readFileSync(childPortfolioPath, "utf8"));
+    expect(cp.goal).toBe("classify stochastic-diagonal idempotents");
+    expect(cp.frontier).toBe("(SD) one classification");
+    expect(cp.forked_from.cycle).toBe(1);
+    expect(cp.forked_from.goal).toBe("prove the conjecture");
+    expect(cp.arms).toEqual([]); // fresh portfolio (no --first-arm given)
+    // child has a FRESH log (the parent's records did not leak in)
+    expect(fs.existsSync(path.join(dest, ".frontier", "log.jsonl"))).toBe(false);
+
+    // parent: the discovery is now FORKED → no longer in the parked DISCOVERIES tail
+    const board = fr("board").stdout;
+    expect(board).not.toContain("a load-bearing lemma");
+  });
+});

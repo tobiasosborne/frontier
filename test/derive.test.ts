@@ -462,4 +462,14 @@ describe("discovery signals (D2)", () => {
     ];
     expect(derive(portfolio(), reused, []).discoveries[0]!.status).toBe("parked");
   });
+
+  test("a fork-marker (fork_of) sets status 'forked' and is not itself a ledger entry (D3)", () => {
+    const log = [
+      disc({ cycle: 3, evidence: ev({ artifact: "obs/x" }) }),
+      rec({ cycle: 4, arm: null, outcome: "discovery", at: null, decision: null, note: "promoted → fork", fork_of: 3 }),
+    ];
+    const ds = derive(portfolio(), log, []).discoveries;
+    expect(ds.length).toBe(1); // the marker itself is not a discovery ledger entry
+    expect(ds[0]!.status).toBe("forked");
+  });
 });

@@ -8,7 +8,7 @@
  *   not an escape — plus a happy-path {ok:true}.
  */
 import { test, expect, describe } from "bun:test";
-import { validateLog, validateDiscover } from "../src/validate";
+import { validateLog, validateDiscover, validateFork } from "../src/validate";
 import type {
   Portfolio,
   DerivedState,
@@ -17,6 +17,7 @@ import type {
   Verdict,
   Evidence,
   Decision,
+  Discovery,
   Outcome,
 } from "../src/types";
 
@@ -261,6 +262,46 @@ describe("validateDiscover", () => {
     const res = validateDiscover(disc());
     expect(res.ok).toBe(true);
     expect(res.error).toBeUndefined();
+  });
+});
+
+// ── validateFork (GF — D3 fork eligibility) ─────────────────────────────────
+
+describe("validateFork", () => {
+  function disc(over: Partial<Discovery> = {}): Discovery {
+    return {
+      cycle: 1, observation: "obs", question: "q", class: "side", tier: "T1",
+      artifact: "obs/x", reuse: 2, learningProgress: false, surprise: false, status: "parked",
+      ...over,
+    };
+  }
+
+  test("rejects when the discovery does not exist", () => {
+    expect(validateFork(undefined, "new goal", "(NG) open").ok).toBe(false);
+  });
+
+  test("rejects without a new goal", () => {
+    expect(validateFork(disc(), "", "(NG) open").ok).toBe(false);
+  });
+
+  test("rejects without a stateable new frontier", () => {
+    const r = validateFork(disc(), "new goal", "");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/frontier/i);
+  });
+
+  test("rejects when not interesting enough (reuse<2 and no learning-progress)", () => {
+    const r = validateFork(disc({ reuse: 1, learningProgress: false }), "new goal", "(NG) open");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/reuse|eligible|learning/i);
+  });
+
+  test("accepts at reuse >= 2 (Decision A)", () => {
+    expect(validateFork(disc({ reuse: 2 }), "new goal", "(NG) open").ok).toBe(true);
+  });
+
+  test("accepts on learning-progress even with reuse < 2 (Decision A)", () => {
+    expect(validateFork(disc({ reuse: 0, learningProgress: true }), "new goal", "(NG) open").ok).toBe(true);
   });
 });
 
