@@ -48,6 +48,7 @@ function state(over: Partial<DerivedState> = {}): DerivedState {
     deadRoutes: [],
     banked: [],
     discoveries: [],
+    orientTurns: 0,
     cycle: 6,
     ...over,
   };
@@ -267,6 +268,18 @@ describe("renderBoard DISCOVERIES", () => {
     expect(out).toContain("kept parked");
     expect(out).not.toContain("aged out");
     expect(out).not.toContain("became an arm");
+  });
+});
+
+// ── NO-WAVE TURNS (orient) tail ──────────────────────────────────────────────
+
+describe("orient turns tail", () => {
+  test("renders a NO-WAVE TURNS count when orientTurns > 0", () => {
+    expect(renderBoard(state({ orientTurns: 3 }))).toContain("NO-WAVE TURNS: ×3");
+  });
+
+  test("no NO-WAVE line when orientTurns is 0", () => {
+    expect(renderBoard(state({ orientTurns: 0 }))).not.toContain("NO-WAVE TURNS");
   });
 });
 

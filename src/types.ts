@@ -15,8 +15,11 @@
  * Outcome of one arm-pull. `died` is the modal, productive outcome (PRD §4.3).
  * `discovery` is OFF-ARM/OFF-FRONTIER — a parked off-goal result (prd-discovery §4.1); it
  * carries `arm: null` and is neutral to the breaker.
+ * `orient` is OFF-ARM and NOT A WAVE — a no-wave turn marker (orientation / planning /
+ * answering the user); it carries `arm: null` + no decision, satisfies G1, and is neutral
+ * to every breaker (it is not a pull). PRD §4.2.
  */
-export type Outcome = "banked" | "progress" | "died" | "refuted" | "null" | "discovery";
+export type Outcome = "banked" | "progress" | "died" | "refuted" | "null" | "discovery" | "orient";
 
 export const OUTCOME_GLYPH: Record<Outcome, string> = {
   banked: "▣",
@@ -25,6 +28,7 @@ export const OUTCOME_GLYPH: Record<Outcome, string> = {
   refuted: "⊘",
   null: "—",
   discovery: "⟡",
+  orient: "·",
 };
 
 /** Evidence class is an OPEN vocabulary; these are the well-known kinds. */
@@ -227,6 +231,7 @@ export interface DerivedState {
   deadRoutes: DeadRoute[];
   banked: BankedResult[];
   discoveries: Discovery[]; // parked off-goal results (prd-discovery §4.2)
+  orientTurns: number; // count of no-wave `orient ·` markers (off-arm, not pulls). PRD §4.2.
   cycle: number; // last cycle index seen (0 if empty)
 }
 

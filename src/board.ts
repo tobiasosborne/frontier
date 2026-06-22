@@ -76,6 +76,13 @@ export function renderBoard(state: DerivedState, opts: BoardOpts = {}): string {
     lines.push(`DISCOVERIES (off-goal, parked): ${shown}`);
   }
 
+  // ── NO-WAVE TURNS tail (orient ·) ────────────────────────────────────────
+  // Factual count of no-wave turns (orientation / planning). Surfaced so the no-wave
+  // escape stays VISIBLE rather than hidden — it is not a pull and never trips a breaker.
+  if (state.orientTurns > 0) {
+    lines.push(`NO-WAVE TURNS: ×${state.orientTurns}`);
+  }
+
   return lines.join("\n");
 }
 

@@ -8,7 +8,7 @@
  *   not an escape — plus a happy-path {ok:true}.
  */
 import { test, expect, describe } from "bun:test";
-import { validateLog, validateDiscover, validateFork } from "../src/validate";
+import { validateLog, validateDiscover, validateOrient, validateFork } from "../src/validate";
 import type {
   Portfolio,
   DerivedState,
@@ -64,6 +64,7 @@ function state(arms: DerivedArm[], over: Partial<DerivedState> = {}): DerivedSta
     deadRoutes: [],
     banked: [],
     discoveries: [],
+    orientTurns: 0,
     cycle: arms.length,
     ...over,
   };
@@ -260,6 +261,33 @@ describe("validateDiscover", () => {
 
   test("accepts a well-formed discovery", () => {
     const res = validateDiscover(disc());
+    expect(res.ok).toBe(true);
+    expect(res.error).toBeUndefined();
+  });
+});
+
+// ── validateOrient (no-wave turn): requires a brief reason ───────────────────
+
+describe("validateOrient", () => {
+  function ori(over: Partial<LogRecord> = {}): LogRecord {
+    return rec({
+      arm: null,
+      outcome: "orient",
+      at: null,
+      decision: null,
+      note: "familiarising with the project",
+      ...over,
+    });
+  }
+
+  test("rejects an orient with no reason (an empty no-wave marker)", () => {
+    const res = validateOrient(ori({ note: "" }));
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/reason/i);
+  });
+
+  test("accepts a well-formed orient marker", () => {
+    const res = validateOrient(ori());
     expect(res.ok).toBe(true);
     expect(res.error).toBeUndefined();
   });

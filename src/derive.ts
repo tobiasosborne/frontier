@@ -126,7 +126,12 @@ export function derive(
   //    (prd-discovery §4.2–4.4). Off-arm by construction, so neutral to every breaker.
   const discoveries = deriveDiscoveries(log, isLive, p.arms, cycle);
 
-  return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, discoveries, cycle };
+  // ── orient turns: live `orient` markers (no-wave turns — orientation / planning /
+  //    answering the user). Off-arm, so excluded from every arm above; counted here only
+  //    so the board can surface them factually (PRD §4.2). They are NOT pulls.
+  const orientTurns = log.reduce((n, r) => (r.outcome === "orient" && isLive(r) ? n + 1 : n), 0);
+
+  return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, discoveries, orientTurns, cycle };
 }
 
 // ── discoveries ledger ───────────────────────────────────────────────────────

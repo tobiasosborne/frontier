@@ -30,7 +30,7 @@ import {
 } from "./store";
 import { derive } from "./derive";
 import { check } from "./referee";
-import { validateLog, validateDiscover, validateFork } from "./validate";
+import { validateLog, validateDiscover, validateOrient, validateFork } from "./validate";
 import { renderBoard, promptHook, stopPass, stopBlock, stopSoft } from "./board";
 import { runOracle, currentVerdicts } from "./oracle";
 import { out, err, parseArgs } from "./cliutil";
@@ -301,6 +301,51 @@ function buildDiscovery(
     supersedes: null,
     wave: flags.wave,
     cites: cites.length ? cites : undefined,
+  };
+}
+
+// ── orient (no-wave turn marker) ────────────────────────────────────────────────
+
+export function cmdOrient(dir: string, rest: string[], now: string): number {
+  const { pos } = parseArgs(rest);
+  const reason = pos[0];
+  if (!reason) {
+    err('usage: fr orient "<why this turn ran no wave>"  (orientation / planning / answering the user)');
+    return 1;
+  }
+  if (!isActive(dir)) {
+    err("no .frontier/ here — run `fr init \"<goal>\"`.");
+    return 1;
+  }
+  const log = readLog(dir);
+  const rec = buildOrient(reason, log, now);
+  const result = validateOrient(rec);
+  if (!result.ok) {
+    err(result.error ?? "rejected");
+    return 1;
+  }
+  appendLog(dir, rec);
+  out("orient · logged — no-wave turn recorded (off-arm, not a pull)");
+  return 0;
+}
+
+/** An off-arm, off-frontier no-wave marker (arm:null, no decision) — satisfies G1, never a pull. PRD §4.2. */
+function buildOrient(reason: string, log: LogRecord[], now: string): LogRecord {
+  return {
+    ts: now,
+    cycle: log.reduce((m, r) => Math.max(m, r.cycle), 0) + 1,
+    arm: null, // OFF-ARM — neutral to every breaker; not counted in any arm's pulls
+    target: null,
+    outcome: "orient",
+    at: null,
+    note: reason,
+    evidence: null,
+    workers: [],
+    p_true: null,
+    p_audit: null,
+    decision: null, // a no-wave turn ends on no decision (G4 does not apply)
+    frontier_after: null,
+    supersedes: null,
   };
 }
 

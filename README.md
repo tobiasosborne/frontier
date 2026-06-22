@@ -204,6 +204,7 @@ A worked walkthrough is in [docs/tutorial.md](docs/tutorial.md).
 | `fr arm add/set <id> …` | Register / re-aim an approach (priority, target, kill criterion) |
 | `fr frontier "<open>"` | Record a FRONTIER reduction |
 | `fr log <arm> <outcome> "<note>" … --decide <T> <arm>` | Append one cycle record (the per-turn call) |
+| `fr orient "<why>"` | Record a no-wave turn (orientation / planning) — satisfies the Stop hook, not a pull |
 | `fr verify <claim> --oracle <name>` | Run an oracle → verdict (the only way to earn `▣ banked`) |
 | `fr board [--hook prompt]` | Render the scoreboard (hook form = UserPromptSubmit JSON) |
 | `fr check [--hook stop]` | The referee (hook form = Stop JSON; fail-closed) |
@@ -218,7 +219,7 @@ A worked walkthrough is in [docs/tutorial.md](docs/tutorial.md).
 **Working (MVP):** the full command surface; the five-rung outcome ladder; the frontier-stall
 breaker + `PIVOT`; the bank gate (`fr verify` + hash-bound, stale-on-change verdicts); dead-routes
 and banked ledgers; supersession; the loop guard; fail-closed/fail-soft hooks; the in-CLI manual.
-136 tests; `<50 ms` hook path; dogfood-validated on a real conjecture campaign.
+183 tests; `<50 ms` hook path; dogfood-validated on a real conjecture campaign.
 
 **Roadmap:** rigour-weighted decaying optimism for untried arms (the one real bandit term);
 `fr lessons` (cross-campaign recurring-dead-route mining); multi-arm allocation accounting; a

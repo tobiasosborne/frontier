@@ -324,6 +324,45 @@ describe("D1 discovery", () => {
   });
 });
 
+// ── orient: a no-wave turn satisfies the Stop hook without faking an arm-pull ──
+
+describe("orient (no-wave turn)", () => {
+  test("fr orient appends an off-arm marker and lets the Stop hook pass", () => {
+    init();
+    beginTurn();
+    const res = fr("orient", "familiarising with the project");
+    expect(res.code).toBe(0);
+    const rec = JSON.parse(fs.readFileSync(path.join(frontierDir, "log.jsonl"), "utf8").trim());
+    expect(rec.outcome).toBe("orient");
+    expect(rec.arm).toBeNull();
+    expect(rec.decision).toBeNull();
+    const out = JSON.parse(fr("check", "--hook", "stop").stdout);
+    expect(out.decision).toBeUndefined(); // pass → {} (no block)
+  });
+
+  test("fr orient with no reason is rejected at write time", () => {
+    init();
+    beginTurn();
+    const res = fr("orient");
+    expect(res.code).toBe(1);
+    expect(fs.existsSync(path.join(frontierDir, "log.jsonl"))).toBe(false);
+  });
+
+  test("two orient turns add ZERO pulls to any arm and never trip the breaker", () => {
+    init();
+    beginTurn();
+    fr("orient", "reading docs");
+    expect(JSON.parse(fr("check", "--hook", "stop").stdout).decision).toBeUndefined();
+    beginTurn();
+    fr("orient", "still reading");
+    expect(JSON.parse(fr("check", "--hook", "stop").stdout).decision).toBeUndefined();
+    // arm A was never funded — the board must still show it untried (??), not stalled.
+    const board = fr("board").stdout;
+    expect(board).toContain("A exploratory  untried ??");
+    expect(board).toContain("NO-WAVE TURNS: ×2");
+  });
+});
+
 // ── D2: promote-to-arm ───────────────────────────────────────────────────────
 
 describe("D2 promote-to-arm", () => {

@@ -55,6 +55,18 @@ export function validateDiscover(rec: LogRecord): ValidationResult {
 }
 
 /**
+ * Write-time validation for `fr orient` (PRD §4.2). A no-wave turn marker is cheap and liberal
+ * (orientation / planning / answering the user), but it must carry a brief reason so the log
+ * stays auditable — a no-wave escape must never be contentless. PURE.
+ */
+export function validateOrient(rec: LogRecord): ValidationResult {
+  if (!rec.note || !rec.note.trim()) {
+    return reject('A no-wave turn needs a brief reason: fr orient "<why this turn ran no wave>".');
+  }
+  return { ok: true };
+}
+
+/**
  * GF — fork eligibility (prd-discovery §4.5 / §12 Decision A). A discovery may seed a NEW campaign
  * only with (a) a stateable new frontier, (b) a new goal, and (c) enough interestingness:
  * cross-thread `reuse ≥ K_FORK` OR demonstrated learning-progress (NOT raw surprise). PURE.

@@ -74,7 +74,7 @@ export function check(state: DerivedState, turn: TurnState, log: LogRecord[],
 Let `newThisTurn = log.slice(turn.log_len_at_turn_start)` and `newest = log[log.length-1]`. Gates, in order;
 the FIRST failing gate determines the result. If `turn.blocks_this_turn >= p.config.max_blocks_per_turn`,
 return `{status:"soft", ...}` (with the gate/reason) **instead of** `{status:"block"}` (loop guard).
-- **G1 logged-this-turn:** `newThisTurn.length === 0` → block "No wave outcome logged this turn. Record it with `fr log …`."
+- **G1 logged-this-turn:** the turn appended no **arm-pull** (`outcome ∉ {discovery, orient}`) **and** no **`orient`** marker → block "No wave outcome logged this turn. Record it with `fr log …` (or `fr orient` if no wave ran)." A turn accounted for by an `orient` alone (no pulls this turn) then **early-returns pass** — the wave gates have nothing to adjudicate, and this stops G4 firing on a legitimate first-turn orient.
 - **G5 died-needs-residual:** any `r∈newThisTurn` with `r.outcome==="died" && !r.at` → block.
 - **G2 progress/banked-backed:** any `r∈newThisTurn` with `r.outcome∈{progress,banked}` and no resolvable
   artifact (`!r.evidence?.artifact`) → block.
@@ -265,3 +265,31 @@ spins into its own campaign (a new `.frontier/`), not a multi-goal parent.
 | `validate.test.ts` | `validateFork` rejects no-discovery / no-goal / no-frontier / under-threshold; accepts at reuse≥2 or learning-progress |
 | `derive.test.ts` | a `fork_of` marker sets the discovery `status:"forked"` and is not itself a ledger entry |
 | `integration.test.ts` | an ineligible discovery is refused (no child created); an eligible one scaffolds a child `.frontier/portfolio.json` with `forked_from` + a FRESH log, and drops off the parent's parked board |
+
+## 9. Orient — no-wave turn marker (built)
+
+Spec: `docs/prd.md` §4.2. A turn that ran **no wave** (a fresh agent familiarising; planning; answering
+the user) must still satisfy G1, but faking a `null` arm-pull inflates the arm's `pulls`/`stale` (two
+nulls trip the breaker on pure orientation). `fr orient "<why>"` gives no-wave turns an off-arm channel.
+
+**Same key simplification as discovery:** an orient record carries `arm: null`, and `deriveArm` filters
+`r.arm === arm.id`, so orients are **already excluded** from every arm's `pulls`/`stale`/`strip` — it is
+breaker-neutral for free. The only new logic is in `referee.ts` (G1 accepts it) and a small derived count.
+
+- **`types.ts`** — `Outcome` gains `"orient"`; `OUTCOME_GLYPH.orient = "·"`; `DerivedState` gains `orientTurns: number`.
+- **`derive.ts`** — `orientTurns` = count of live `outcome:"orient"` records (off-arm, so it touches nothing else).
+- **`referee.ts`** — G1 blocks iff the turn has **no arm-pull and no orient**; on a no-wave turn (no pulls
+  this turn) it **early-returns `{status:"pass"}`** *before* the wave gates (so G4's `!newest` cannot fire
+  on a first-turn orient). `isPull` excludes both `discovery` and `orient`.
+- **`validate.ts`** — pure `validateOrient(rec)`: reject an empty reason (a no-wave escape must stay auditable).
+- **`board.ts`** — append `NO-WAVE TURNS: ×N` when `orientTurns > 0` (factual; keeps the escape visible).
+- **`commands.ts`** — `cmdOrient(dir, rest, now)` (build off-arm record → `validateOrient` → append).
+- **`cli.ts`** — dispatch `orient`. **`help.ts`** — `orient` command entry; OVERVIEW ritual + COMMANDS list.
+
+| Test file | Asserts (orient) |
+|---|---|
+| `derive.test.ts` | an `orient` record is breaker-neutral (not in any arm's `pulls`/`stale`/`strip`); two orients add zero pulls and leave the arm `untried`; `orientTurns` counts live markers |
+| `referee.test.ts` | an orient satisfies G1; an orient-only FIRST turn passes (G4 not tripped); a turn that logs nothing still blocks G1; an orient-only turn does not trip G3 against a pre-stalled arm |
+| `validate.test.ts` | `validateOrient` rejects an empty reason; accepts a well-formed marker |
+| `board.test.ts` | renders `NO-WAVE TURNS: ×N` when `orientTurns > 0`; no line when 0 |
+| `integration.test.ts` | `fr orient "x"` appends an off-arm marker and the Stop hook passes; `fr orient` with no reason is rejected; two orient turns add zero pulls (arm stays `??`) and surface `NO-WAVE TURNS: ×2` |

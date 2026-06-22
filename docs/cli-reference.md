@@ -39,6 +39,14 @@ Append one cycle record (one arm-pull). The only required per-turn call.
 unknown arm; a stalled arm with an `EXPLOIT` / `EXPLORE`-to-itself decision (use `EXPLORE`-different /
 `PIVOT`, or reduce the frontier with `--frontier`).
 
+## `fr orient "<why this turn ran no wave>"`
+Record a **no-wave turn** — orientation (a fresh agent familiarising), planning, or answering the user, when
+no subagent wave actually ran. Off-arm and breaker-**neutral**: it is **not** a pull (it never inflates any
+arm's pull count, glyph strip, or stall counter) but it **does** satisfy the Stop hook (G1) for this turn, so
+you no longer fake a `null` arm-pull to end such a turn. A brief reason is **required** (kept auditable); the
+board surfaces `NO-WAVE TURNS: ×N`. Unlike `fr discover`, an orient *is* a valid way to end a turn (a
+discovery is additional to a wave, never a substitute).
+
 ## `fr verify <claim> --oracle <name>`
 Run a registered oracle (argv, **no shell**; claim text on stdin) and record a verdict. Exit 0 → pass,
 non-zero → fail. The only way to earn `▣ banked`. Oracles live in `.frontier/portfolio.json`:

@@ -21,8 +21,16 @@ frontier-stall breaker is respected. Everything else is light ceremony (`fr log`
 
 ## 1. Current state
 
-- **169 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
-  board ≈44 ms / check ≈47 ms (50 ms budget). **`fr` installed globally** at `~/.local/bin/fr` (on PATH).
+- **183 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
+  board ≈26 ms / check ≈25 ms (50 ms budget). **`fr` installed globally** at `~/.local/bin/fr` (on PATH).
+- **No-wave turn marker (built this session, `docs/prd.md` §4.2 + IMPL_PLAN §9).** A seventh outcome
+  `orient ·` (`fr orient "<why>"`) gives no-wave turns (a fresh agent *familiarising*, planning, answering
+  the user) an **off-arm** channel that **satisfies G1 but is NOT a pull** — fixing the bug where ending an
+  orientation turn meant faking a `null` arm-pull (two of which trip the breaker on pure orientation). Same
+  shape as `discovery` (arm:null → already excluded from every arm's pulls/stale/strip); G1 now blocks iff
+  the turn has no arm-pull AND no orient, and a no-wave turn early-returns pass before the wave gates. Board
+  surfaces `NO-WAVE TURNS: ×N` so the escape stays visible. (Decision: dedicated marker, chosen by TJO over
+  off-arm-null / dup-collapse.)
 - **Discovery ledger + fork (built this session, `docs/prd-discovery.md`).** A sixth outcome `discovery ⟡`
   (`fr discover "<obs>" --question "…"`) gives off-goal results a **breaker-neutral** channel (off-arm, so the
   per-arm `stale` walk skips it). Derived `discoveries` ledger with signals **reuse** (distinct citing arms),
@@ -31,8 +39,9 @@ frontier-stall breaker is respected. Everything else is light ceremony (`fr log`
   stateable new frontier + reuse≥2 or learning-progress; scaffolds a child `.frontier/`, prepares-not-launches).
   Decisions A/B taken as proposed defaults; **C deferred** (no §15.1 change). The board shows only PARKED
   discoveries (decay/promotion hide, never delete).
-- **Feature-complete MVP:** `init · arm add/set · frontier · log · verify · board · check · turn-begin · status ·
-  help`; five outcomes `▣ banked / △ progress / ✗ died / ⊘ refuted / — null`; evidence class+tier+workers+P;
+- **Feature-complete MVP:** `init · arm add/set · frontier · log · discover · orient · fork · verify · board ·
+  check · turn-begin · status · help`; five wave outcomes `▣ banked / △ progress / ✗ died / ⊘ refuted / — null`
+  plus two off-arm channels `⟡ discovery / · orient`; evidence class+tier+workers+P;
   the **bank gate** (`fr verify` oracle + hash-bound verdicts); the **frontier-stall breaker** + `PIVOT`;
   dead-routes ledger; supersession; loop guard; fail-closed/soft; orchestrator-only file-gated hooks; and a
   **progressively-discoverable in-CLI manual** (`fr help [topic]`, teaching errors, next-step nudges).
@@ -63,7 +72,7 @@ oracles}, arms), `log.jsonl` (append-only, one record per arm-pull — the singl
 
 ```bash
 bun install                 # once — dev tooling only (typescript, @types/bun); ZERO runtime deps
-bun test                    # THE gate — 135 red/green unit + integration tests
+bun test                    # THE gate — 183 red/green unit + integration tests
 bun run typecheck           # tsc --noEmit
 bun run build               # → dist/fr  (standalone, embeds the Bun runtime; ~94 MB is expected)
 bun run latency             # build + assert board/check cold start < 50 ms

@@ -66,6 +66,7 @@ function state(arms: DerivedArm[], over: Partial<DerivedState> = {}): DerivedSta
     deadRoutes: [],
     banked: [],
     discoveries: [],
+    orientTurns: 0,
     cycle: arms.length,
     ...over,
   };
@@ -292,6 +293,47 @@ describe("discovery (D1)", () => {
     const pull = rec({ arm: "A", outcome: "died", at: "R1", decision: decision("EXPLOIT", "A") });
     const disc = rec({ arm: null, outcome: "discovery", at: null, decision: null, note: "obs", question: "q" });
     const res = check(state([arm()]), turn({ log_len_at_turn_start: 0 }), [pull, disc], portfolio(), []);
+    expect(res.status).toBe("pass");
+  });
+});
+
+// ── orient (no-wave turn): satisfies G1, never adjudicated as a wave ──────────
+
+describe("orient (no-wave turn)", () => {
+  test("an orient marker satisfies G1 — a no-wave turn passes", () => {
+    const o = rec({ arm: null, outcome: "orient", at: null, decision: null, note: "familiarising" });
+    const res = check(state([arm()]), turn({ log_len_at_turn_start: 0 }), [o], portfolio(), []);
+    expect(res.status).toBe("pass");
+  });
+
+  test("an orient-only FIRST turn (no prior arm-pull) passes — G4 not spuriously tripped", () => {
+    // Empty portfolio of pulls: the only record is an orient. `newest` arm-pull is undefined,
+    // but a no-wave turn must not trip G4 (there is no wave/decision to require).
+    const o = rec({ arm: null, outcome: "orient", at: null, decision: null, note: "reading docs" });
+    const res = check(state([]), turn({ log_len_at_turn_start: 0 }), [o], portfolio(), []);
+    expect(res.status).toBe("pass");
+  });
+
+  test("a turn that logs NOTHING (not even an orient) still blocks G1", () => {
+    const prior = rec({ arm: "A", outcome: "died", at: "R1", decision: decision("EXPLOIT", "A") });
+    // turn started at len 1 → nothing new this turn (no pull, no orient)
+    const res = check(state([arm()]), turn({ log_len_at_turn_start: 1 }), [prior], portfolio(), []);
+    expect(res.status).toBe("block");
+    expect(res.gate).toBe("G1");
+  });
+
+  test("an orient-only turn does NOT trip G3 even when a prior arm is stalled", () => {
+    // Arm A is stalled from prior turns; this turn only orients — the breaker must stay quiet
+    // (orient is off-arm and breaker-neutral; the wave gates don't run on a no-wave turn).
+    const priorStalled = rec({ arm: "A", outcome: "died", at: "R1", decision: decision("EXPLOIT", "A") });
+    const o = rec({ arm: null, outcome: "orient", at: null, decision: null, note: "planning" });
+    const res = check(
+      state([arm({ stale: 2, status: "stalled" })]),
+      turn({ log_len_at_turn_start: 1 }),
+      [priorStalled, o],
+      portfolio(),
+      [],
+    );
     expect(res.status).toBe("pass");
   });
 });

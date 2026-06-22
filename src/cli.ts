@@ -17,6 +17,7 @@ import {
   cmdFrontier,
   cmdLog,
   cmdDiscover,
+  cmdOrient,
   cmdFork,
   cmdVerify,
   cmdBoard,
@@ -40,6 +41,8 @@ export function run(argv: string[], now: string): number {
       return cmdLog(dir, rest, now);
     case "discover":
       return cmdDiscover(dir, rest, now);
+    case "orient":
+      return cmdOrient(dir, rest, now);
     case "fork":
       return cmdFork(dir, rest, now);
     case "verify":

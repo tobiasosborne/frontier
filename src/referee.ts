@@ -52,11 +52,15 @@ export function check(
   });
 
   const newThisTurn = log.slice(turn.log_len_at_turn_start);
-  // Off-arm `discovery ⟡` records are NOT a wave outcome and carry no decision, so the
-  // decision-bearing gates (G3/G4) read the newest ARM-PULL, and G1 counts arm-pulls only
-  // (a turn that logs only a discovery has not logged its wave outcome). prd-discovery §7.
-  const isPull = (r: LogRecord): boolean => r.outcome !== "discovery";
+  // Off-arm records (`discovery ⟡`, `orient ·`) are NOT a wave outcome and carry no decision,
+  // so the decision-bearing gates (G3/G4) read the newest ARM-PULL, and G1 counts arm-pulls
+  // only (a turn that logs only a discovery has not logged its wave outcome). prd-discovery §7.
+  const isPull = (r: LogRecord): boolean => r.outcome !== "discovery" && r.outcome !== "orient";
   const newPulls = newThisTurn.filter(isPull);
+  // A no-wave turn (orientation / planning / answering the user) is accounted for by an explicit
+  // `orient ·` marker — off-arm, breaker-neutral, and NOT a pull. It satisfies G1 without
+  // faking an arm-pull (PRD §4.2); the wave gates below have nothing to adjudicate.
+  const newOrients = newThisTurn.filter((r) => r.outcome === "orient");
   let newest: LogRecord | undefined;
   for (let i = log.length - 1; i >= 0; i--) {
     if (isPull(log[i]!)) {
@@ -66,8 +70,17 @@ export function check(
   }
 
   // ── G1 logged-this-turn ────────────────────────────────────────────────────
+  // The turn must be affirmatively accounted for: a wave (≥1 arm-pull) OR an explicit
+  // no-wave `orient` marker. A turn that logs nothing — or only a discovery — still blocks.
+  if (newPulls.length === 0 && newOrients.length === 0) {
+    return fail("G1", "No wave outcome logged this turn. Record it with `fr log …` (or `fr orient` if no wave ran).");
+  }
+
+  // A no-wave (orient-only) turn is now accounted for; there is no wave to adjudicate, so the
+  // remaining gates (G5/G2/G_launder/G2b/G3/G4) do not apply — return pass. (Crucially this
+  // keeps G4's "ends on a decision" from firing on a legitimate first-turn orient.)
   if (newPulls.length === 0) {
-    return fail("G1", "No wave outcome logged this turn. Record it with `fr log …`.");
+    return { status: "pass" };
   }
 
   // ── G5 died-needs-residual ──────────────────────────────────────────────────

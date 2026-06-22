@@ -20,8 +20,10 @@ THE PER-TURN RITUAL (this is the whole protocol):
   The Stop hook blocks the turn until you do. Outcomes:
     ▣ banked (needs \`fr verify\`)  △ progress (needs --artifact)  ✗ died (needs --at)
     ⊘ refuted  — null
+  No wave this turn (orientation / planning / answering)? Record it with \`fr orient "<why>"\`
+  instead of a junk null — off-arm, not a pull, and it never trips the breaker.
 
-COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  fork  verify  board  check  turn-begin  status  help
+COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  orient  fork  verify  board  check  turn-begin  status  help
 CONCEPTS  (\`fr help <topic>\`): workflow  outcomes  breaker  bank-gate  evidence  arms  frontier  discovery  oracles  hooks
 
 The board (injected each turn) is your live FRONTIER + portfolio scoreboard + dead routes.`;
@@ -64,6 +66,13 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   (Platt's "The Question": what would falsify it / why it matters) and is the bar for promotion.
   A discovery is class=stated until externally checked. Later arm-pulls that --cites its artifact
   raise its cross-thread "reuse" on the board.  (\`fr help discovery\`)`,
+
+  orient: `fr orient "<why this turn ran no wave>"
+  Record a NO-WAVE turn — orientation (a fresh agent familiarising), planning, or answering the
+  user, when no subagent wave actually ran. Off-arm and breaker-NEUTRAL: it is NOT a pull (it
+  never inflates any arm's pull count, glyph strip, or stall counter) but it DOES satisfy the
+  Stop hook for this turn — so you no longer fake a junk null to end an orientation turn. A brief
+  reason is required (kept auditable); the board shows "NO-WAVE TURNS: ×N".  (\`fr help breaker\`)`,
 
   fork: `fr fork <cycle> --goal "<new goal>" --frontier "<new reducible open>" \\
        [--dest <path>] [--first-arm <id>:"<desc>"]

@@ -410,6 +410,42 @@ describe("discoveries", () => {
   });
 });
 
+// ── orient (no-wave turn): off-arm, not a pull, counted separately ─────────────
+describe("orient (no-wave turn)", () => {
+  test("an orient marker is breaker-NEUTRAL: not in any arm's pulls/stale/strip", () => {
+    const log: LogRecord[] = [
+      rec({ arm: "A", outcome: "died", at: "R1" }), // stale 1
+      rec({ arm: null, outcome: "orient", at: null, decision: null, note: "orienting" }),
+      rec({ arm: "A", outcome: "died", at: "R1" }), // stale 2 — the orient between did NOT reset/count
+    ];
+    const a = armOf(derive(portfolio(), log, []), "A");
+    expect(a.stale).toBe(2); // breaker walk skips the orient
+    expect(a.pulls).toBe(2); // orient not counted as a pull (the reported bug)
+    expect(a.strip).toBe("✗✗"); // no orient glyph in the strip
+  });
+
+  test("two consecutive orient turns add ZERO pulls and do NOT trip the breaker", () => {
+    // The exact reported scenario: a fresh agent orients twice before any wave.
+    const log: LogRecord[] = [
+      rec({ arm: null, outcome: "orient", at: null, decision: null, note: "familiarising" }),
+      rec({ arm: null, outcome: "orient", at: null, decision: null, note: "still reading" }),
+    ];
+    const a = armOf(derive(portfolio(), log, []), "A");
+    expect(a.pulls).toBe(0);
+    expect(a.stale).toBe(0);
+    expect(a.status).toBe("untried"); // never funded — still an opportunity, not stalled
+  });
+
+  test("orientTurns counts live orient markers", () => {
+    const log: LogRecord[] = [
+      rec({ arm: null, outcome: "orient", at: null, decision: null, note: "a" }),
+      rec({ arm: "A", outcome: "died", at: "R1" }),
+      rec({ arm: null, outcome: "orient", at: null, decision: null, note: "b" }),
+    ];
+    expect(derive(portfolio(), log, []).orientTurns).toBe(2);
+  });
+});
+
 // ── discovery signals + promotion/decay (D2) ──────────────────────────────────
 describe("discovery signals (D2)", () => {
   function disc(over: Partial<LogRecord> = {}): LogRecord {
