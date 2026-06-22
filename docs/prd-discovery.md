@@ -1,6 +1,7 @@
 # PRD — Discovery ledger & campaign fork (`fr`)
 
-**Status:** design doc **DRAFT v0.1** — an extension to the canonical [`docs/prd.md`](./prd.md) (v0.2).
+**Status:** **built (D1–D3) and folded into the canonical [`docs/prd.md`](./prd.md)** (2026-06-22) — §4.8, §5,
+§6, §7, §13, §15. This doc remains the detailed design record + provenance.
 **Owner:** TJO.
 **Grounding:** every mechanism below is tagged to a finding (F1–F10) in
 [`docs/research/discovery-ledger-lit-review.md`](./research/discovery-ledger-lit-review.md), whose primary
@@ -309,8 +310,9 @@ DISCOVERIES (off-goal, parked):
   campaign shows a persistent run of breaker-resetting `progress` pulls with zero reuse and no `frontier_after`
   reduction, flip the rule on then (grounded in F7). Instrument first, enforce only on evidence.
 
-On acceptance, this PRD folds into the canonical PRD (§4 model, §5 data model, §6 CLI, §7 referee, §13
-phasing, §15 locked decisions) and the model-side ritual in `CLAUDE.md` gains one line for `fr discover`.
+**Folded into the canonical PRD 2026-06-22** — `docs/prd.md` §4.8 (model), §5 (data model), §6 (CLI), §7
+(referee deltas), §13 (phasing), §15.6 (locked decisions), and the §10 model-side ritual. This doc remains
+the detailed design record + provenance.
 
 ## 13. Provenance (grounded in the lit review)
 - **Capture-before-judging; near/distant analogy; openness-over-depth** — Dunbar & Blanchette (TICS 2001);

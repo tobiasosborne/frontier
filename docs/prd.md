@@ -6,6 +6,8 @@
 dogfood-validated** — see the [README](../README.md) and [docs](.). v0.1's bones (append-only log as truth,
 derived recency-injected scoreboard, non-skippable Stop-hook referee, hook-ready JSON, factual-not-imperative
 board) are retained; the *model of operation* below is rebuilt around an observed workflow.
+The **discovery ledger + fork** extension (full spec + provenance in [`prd-discovery.md`](./prd-discovery.md),
+phases D1–D3) is **built and green**, and folded into the canonical model below (§4.8, §5, §6, §7, §13, §15).
 **Owner:** TJO.
 **One-line goal:** externalise, for the **orchestrator** of an agent swarm, the explore/exploit controller and big-picture memory it structurally lacks — an append-only cycle log + a derived, recency-injected **FRONTIER + portfolio scoreboard**, made non-skippable via Claude Code hooks, and shaped to mirror the wave-based research workflow that **Fable 5** spontaneously used.
 
@@ -112,6 +114,9 @@ Arms with zero pulls render as `??` and sort to visible prominence, so roads-not
 ### 4.7 The log is the checkpoint (resilience)
 Because the log is append-only and on disk, it *is* the outage/compaction checkpoint. The orchestrator re-orients after any break by reading the derived FRONTIER+board, not the conversation. The Fable resilience protocol maps directly: bounded waves (an interruption loses at most one pull), log-early, and an *orchestrator-local-probe* mode (when the swarm is unreachable, the orchestrator still logs local numerics/derivations as pulls).
 
+### 4.8 Off-goal discovery (the discovery ledger) — `prd-discovery.md`
+The breaker measures progress against the *locked* FRONTIER, so a genuine **off-goal** result reads as "no progress" and could even trip it — the anti-tunnel-vision rule is also anti-serendipity. A sixth outcome **`discovery ⟡`** (`fr discover "<obs>" --question "<falsifier / why it matters>"`) gives off-goal results their own channel: an **off-arm** (`arm:null`) record that is **breaker-neutral** (the per-arm `stale` walk skips it), trusted **weaker** than a banked result (`class=stated` until externally checked), and parked in a derived **discoveries ledger** on the board. Capture is cheap; `--question` (Platt's *The Question*) is the required recognition step. Three log-derivable, advisory signals salience the ledger: **reuse** (distinct *other* arms that `--cites` it — POET's transfer signal and the promotion bar), **learning-progress** (a citing pull that *moved* the frontier), **surprise** (a usable artifact despite a low `p_true`). A reuse-0, non-`T0` discovery **decays** off the board over time (the record stays — F5). Promotion is a three-rung ladder: park → **promote-to-arm** (`fr arm add --from-discovery`, same goal, liberal) → **fork** (`fr fork`, a new campaign, gated). The single locked goal is **not** relaxed inside a campaign — one `.frontier/` = one goal; multi-goal happens only by *forking* a new `.frontier/`, which is what preserves the "one orchestrator = one goal" property (§1). Rationale, computable-signal menu, and sourcing: `prd-discovery.md` (grounded in the lit review in `docs/research/`).
+
 ## 5. Data model
 
 State lives in `.frontier/` at project root (gitignore-able, or committed as the campaign record).
@@ -147,19 +152,26 @@ Append-only is load-bearing: `check`/`board` derive everything from it; the mode
 
 **`.frontier/verdicts/<claim>.<oracle>.json`** — (v1.1) scrubbed, hash-bound oracle verdicts (§7), recorded once and replayed; bound by `claim_hash + oracle_digest + inputs_hash`; auto-**stale** when any of those change.
 
-Derived, never stored: per-arm `pulls` / outcome-strip / best-rung / `stale` / status; the **FRONTIER trail** (the sequence of reductions); the **dead-routes ledger** (`refuted` records + `died`-marked-terminal, keyed on `at`, carrying the killing wave); the **banked-machinery ledger** (`banked` records + constants).
+Derived, never stored: per-arm `pulls` / outcome-strip / best-rung / `stale` / status; the **FRONTIER trail** (the sequence of reductions); the **dead-routes ledger** (`refuted` records + `died`-marked-terminal, keyed on `at`, carrying the killing wave); the **banked-machinery ledger** (`banked` records + constants); the **discoveries ledger** (off-goal `discovery ⟡` records — `arm:null`, `question`, `cites` — with derived `reuse` / learning-progress / surprise + promotion status, §4.8).
+
+A **discovery** record (`outcome:"discovery"`) is off-arm/off-frontier and carries `question` (required) + optional `cites`/`evidence`; a `fr fork` appends an inert `fork_of` marker and writes a child `.frontier/portfolio.json` carrying `forked_from {repo, goal, cycle, discovery, inherits}` (a snapshot, not a live link — the child re-banks via its own oracle).
 
 ## 6. CLI surface
 
 ```
 fr init "<goal>"                                  # create .frontier/, set goal
 fr arm add <id> "<desc>" [--priority P] [--target "<open>"] [--kill "<criterion>"]
+fr arm add <id> --from-discovery <cycle>          # promote a parked discovery into a new arm (same goal)
 fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]   # re-aim / re-weight (allocation)
 fr frontier "<the single live named open>"        # record a FRONTIER reduction
 fr log <arm> <outcome> "<one clause>" \            # THE per-pull call
        [--at "<residual>"] [--artifact <ref>] [--class lit|num|side|af|lean|…] [--tier T0|T1|T2] \
        [--worker model:role]... [--p-true x] [--p-audit y] \
        --decide <EXPLOIT|EXPLORE|PIVOT> <next-arm>
+fr discover "<observation>" --question "<falsifier / why it matters>" \   # off-goal capture (§4.8)
+       [--artifact <ref> --class <c> --tier <t>] [--cites <ref>]...
+fr fork <cycle> --goal "<new goal>" --frontier "<new open>" \             # spin a discovery into its OWN campaign (gated)
+       [--dest <path>] [--first-arm <id>:"<desc>"]
 fr verify <claim> --oracle <name>                  # (v1.1) run an oracle → scrubbed hash-bound verdict (enables banked)
 fr board [--hook prompt]                            # render FRONTIER + scoreboard + dead-routes; --hook → UserPromptSubmit JSON
 fr check [--hook stop]                              # referee; --hook → Stop JSON + exit code
@@ -180,6 +192,8 @@ Deterministic, LLM-free, unit-testable. Split borrowed from `bean`: **`fr check`
 - **G3 — circuit-breaker.** current arm's `stale ≥ stale_threshold` and newest `decision` is `EXPLOIT` or targets the same target → fail: *"Arm <X>'s residual <r> has survived <k> independent attacks. The next cycle must EXPLORE a different arm or PIVOT."*
 - **G4 — turn ends on a decision.** newest record has no `decision` → fail.
 - **G5 — died needs a death certificate.** `outcome == died` without `--at` → fail.
+
+**Discovery deltas (§4.8 / `prd-discovery.md` §7).** G1 counts **arm-pulls only** — a turn that logs only a `discovery ⟡` has not logged its wave outcome and still blocks; G3/G4 read the newest *arm-pull*, so a trailing discovery cannot spuriously trip them. `fr discover` validates **The Question** at write; `fr fork` enforces **GF** (fork eligibility: a stateable new frontier + a new goal + `reuse ≥ 2` **or** learning-progress) at write. A discovery is `class=stated` until externally checked — it can never self-tag `banked`.
 
 **Anti-laundering** (borrowed from `bean`, stated as invariants): a `died`/residual tag cannot mask a `refuted` (a real counterexample is `refuted`, not "died productively"); a failing oracle verdict can never be upgraded to `banked` by self-reported JSON (signal may only *downgrade*); a worker's "it's fine" is `class=stated`, never `tested`/`banked`.
 
@@ -229,7 +243,7 @@ Only the orchestrator session installs these. Subagents (Agent-tool / `codex exe
 ## 10. Model-side protocol (goes in `CLAUDE.md`)
 
 Kept to a ritual — Fable already runs this; the ritual just makes it legible to any model:
-> You are the **orchestrator**. Each turn is a **wave**: brief and dispatch subagents, harvest, and before ending the turn log **one `fr log` per arm-pull**: `fr log <arm> <outcome> "<one clause>" [--at "<residual>"] [--artifact <ref> --class <c> --tier <t>] [--worker model:role …] --decide <EXPLOIT|EXPLORE|PIVOT> <next-arm>`. `△ progress` needs a real artifact; `▣ banked` needs an independent `fr verify`; `✗ died` needs the residual it died at. If the board shows an arm's residual stalled at the threshold, the next decision must be EXPLORE or PIVOT. Update `fr frontier` whenever the open reduces. Subagents do the object-level work and return artifacts; **only you touch `fr`.** Do **not** raise sampling temperature to "explore" — exploration is a decision, not token noise.
+> You are the **orchestrator**. Each turn is a **wave**: brief and dispatch subagents, harvest, and before ending the turn log **one `fr log` per arm-pull**: `fr log <arm> <outcome> "<one clause>" [--at "<residual>"] [--artifact <ref> --class <c> --tier <t>] [--worker model:role …] --decide <EXPLOIT|EXPLORE|PIVOT> <next-arm>`. `△ progress` needs a real artifact; `▣ banked` needs an independent `fr verify`; `✗ died` needs the residual it died at. If the board shows an arm's residual stalled at the threshold, the next decision must be EXPLORE or PIVOT. Update `fr frontier` whenever the open reduces. Subagents do the object-level work and return artifacts; **only you touch `fr`.** Do **not** raise sampling temperature to "explore" — exploration is a decision, not token noise. If a wave turns up an **off-goal** result worth keeping, park it with `fr discover "<obs>" --question "<falsifier / why it matters>"` — off-arm and breaker-neutral, *additional* to (never a substitute for) your wave's `fr log`.
 
 ## 11. Implementation: Bun (the chosen stack)
 
@@ -252,6 +266,7 @@ The target is a **greenfield conjecture**, not one of the existing repos — so 
 - **MVP (smoke test).** `init`, `arm add/set`, `frontier`, `log`, `board`, `check`, `status`. Frontier-stall breaker; the five-rung outcome vocabulary with `died-at`; G1/G2/G3/G4/G5 + anti-laundering at write time; board = FRONTIER + scoreboard + dead-routes. No oracle execution yet (`banked` allowed with a self-cited artifact, flagged unverified).
 - **v1.1 — the bank gate.** `fr verify` + oracle config + hash-bound scrubbed verdicts + G2b (`banked` needs an independent verdict). This is the `af`/`lean`/numerics-rerun rigour rung and the real anti-gaming close.
 - **v2.** `fr lessons` (cross-cycle recurring-dead-route + high-churn mining, *consumed* by the orchestrator — a deliberate step past `bean`'s "propose-never-apply" line, stated as such); rigour-weighted decaying optimism (the real bandit term); brief-archiving / resilience automation; multi-arm allocation accounting; validating `--artifact` against a sister-repo claim ledger.
+- **Discovery ledger + fork (built — `prd-discovery.md`, D1–D3).** `fr discover` (off-goal capture, §4.8) + the derived discoveries ledger (reuse / learning-progress / surprise signals, decay); `fr arm add --from-discovery` (promote-to-arm); `fr fork` (gated child campaign). Grounded in the cross-disciplinary lit review in `docs/research/`.
 
 ## 14. Acceptance / smoke test
 
@@ -280,6 +295,7 @@ All five forks are decided; the MVP spec in §13 is buildable as-is.
 3. **Single-level arms + a `target` field** for MVP; full lane ⊃ sub-arm nesting deferred to v2.
 4. **`.frontier/` is committed** — the append-only log *is* the campaign record ("one harvest = one commit"). Only `.frontier/bin/` and any raw verdict logs are gitignored.
 5. **Lab-book render (STATE.md/HANDOFF.md projection, §12) deferred to v2.** MVP keeps state in `.frontier/` only.
+6. **Discovery ledger + fork (§4.8, `prd-discovery.md`).** Off-goal results get a breaker-neutral `discovery ⟡` channel. Resolved 2026-06-22: **(A)** fork-eligible at `reuse ≥ 2` **or** learning-progress; **(B)** decay is rigour-weighted and **hides, never deletes**; **(C)** the `progress`-resets-breaker tightening is **deferred** (no change to decision 1 / §4.5 — flipped on only if instrumentation shows persistent progress-theatre). **One goal per `.frontier/` is preserved** — multi-goal happens only by forking a new campaign.
 
 ## 16. Provenance (what we borrowed, and from where)
 
