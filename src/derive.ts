@@ -18,6 +18,7 @@ import {
   type DerivedArm,
   type DeadRoute,
   type BankedResult,
+  type Discovery,
   type ArmStatus,
   type Tier,
   type EvidenceClass,
@@ -74,6 +75,7 @@ export function derive(
   const deadByResidual = new Map<string, DeadRoute>();
   for (const r of log) {
     if (!isLive(r)) continue;
+    if (r.arm == null) continue; // off-arm (discovery) records never join the dead-routes ledger
     // `died` carries its residual in `at` (G5 guarantees it). `refuted` names the
     // killed thing in `target`, but operators naturally use `at`/note — so fall
     // back, otherwise a refutation silently misses the dead-routes ledger.
@@ -98,6 +100,7 @@ export function derive(
   const banked: BankedResult[] = [];
   for (const r of log) {
     if (r.outcome !== "banked" || !isLive(r)) continue;
+    if (r.arm == null) continue; // banked always names an arm; narrows arm to string
     const artifact = r.evidence?.artifact ?? null;
     const verified =
       artifact != null && verdicts.some((v) => v.result === "pass" && v.claim === artifact);
@@ -111,9 +114,45 @@ export function derive(
     });
   }
 
+  // ── discoveries ledger: live `discovery` records, with cross-thread `reuse`
+  //    (prd-discovery §4.2). Off-arm by construction, so neutral to every breaker.
+  const discoveries = deriveDiscoveries(log, isLive);
+
   const cycle = log.reduce((max, r) => (r.cycle > max ? r.cycle : max), 0);
 
-  return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, cycle };
+  return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, discoveries, cycle };
+}
+
+// ── discoveries ledger ───────────────────────────────────────────────────────
+
+function deriveDiscoveries(log: LogRecord[], isLive: (r: LogRecord) => boolean): Discovery[] {
+  const out: Discovery[] = [];
+  for (const r of log) {
+    if (r.outcome !== "discovery" || !isLive(r)) continue;
+    const artifact = r.evidence?.artifact ?? null;
+    // reuse = DISTINCT arms whose (non-discovery) pulls cite this discovery's artifact
+    // — POET's "transfer is load-bearing" signal, cross-THREAD not citation count.
+    let reuse = 0;
+    if (artifact != null) {
+      const citingArms = new Set<string>();
+      for (const o of log) {
+        if (o.outcome === "discovery" || o.arm == null) continue;
+        if ((o.cites ?? []).includes(artifact)) citingArms.add(o.arm);
+      }
+      reuse = citingArms.size;
+    }
+    out.push({
+      cycle: r.cycle,
+      observation: r.note,
+      question: r.question ?? "",
+      class: r.evidence?.class ?? null,
+      tier: r.evidence?.tier ?? null,
+      artifact,
+      reuse,
+      status: "parked", // promoted-arm/forked/decayed are D2/D3
+    });
+  }
+  return out;
 }
 
 // ── per-arm derivation ─────────────────────────────────────────────────────────

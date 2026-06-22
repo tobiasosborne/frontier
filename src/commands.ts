@@ -30,7 +30,7 @@ import {
 } from "./store";
 import { derive } from "./derive";
 import { check } from "./referee";
-import { validateLog } from "./validate";
+import { validateLog, validateDiscover } from "./validate";
 import { renderBoard, promptHook, stopPass, stopBlock, stopSoft } from "./board";
 import { runOracle, currentVerdicts } from "./oracle";
 import { out, err, parseArgs } from "./cliutil";
@@ -145,7 +145,7 @@ export function cmdFrontier(dir: string, rest: string[]): number {
 // ── log ────────────────────────────────────────────────────────────────────────
 
 export function cmdLog(dir: string, rest: string[], now: string): number {
-  const { pos, flags, workers } = parseArgs(rest);
+  const { pos, flags, workers, cites } = parseArgs(rest);
   const [arm, outcomeRaw, note] = pos;
   if (!arm || !outcomeRaw) {
     err("usage: fr log <arm> <outcome> \"<note>\" [flags] --decide <TYPE> <next-arm>");
@@ -156,7 +156,7 @@ export function cmdLog(dir: string, rest: string[], now: string): number {
   const verdicts = liveVerdicts(dir);
   const state = derive(p, log, verdicts);
 
-  const rec = buildRecord(arm, outcomeRaw as Outcome, note ?? "", flags, workers, log, now);
+  const rec = buildRecord(arm, outcomeRaw as Outcome, note ?? "", flags, workers, cites, log, now);
   const result = validateLog(p, state, rec, verdicts);
   if (!result.ok) {
     err(result.error ?? "rejected");
@@ -180,6 +180,7 @@ function buildRecord(
   note: string,
   flags: Record<string, string>,
   workers: string[],
+  cites: string[],
   log: LogRecord[],
   now: string,
 ): LogRecord {
@@ -217,6 +218,78 @@ function buildRecord(
     frontier_after: flags.frontier ?? null,
     supersedes: flags.supersedes !== undefined ? Number(flags.supersedes) : null,
     wave: flags.wave,
+    cites: cites.length ? cites : undefined,
+  };
+}
+
+// ── discover (D1: off-goal capture) ─────────────────────────────────────────────
+
+export function cmdDiscover(dir: string, rest: string[], now: string): number {
+  const { pos, flags, workers, cites } = parseArgs(rest);
+  const observation = pos[0];
+  if (!observation) {
+    err('usage: fr discover "<observation>" --question "<falsifier / why it matters>" [--artifact <ref> --class <c> --tier <t>] [--cites <ref>]...');
+    return 1;
+  }
+  if (!isActive(dir)) {
+    err("no .frontier/ here — run `fr init \"<goal>\"`.");
+    return 1;
+  }
+  const log = readLog(dir);
+  const rec = buildDiscovery(observation, flags, workers, cites, log, now);
+  const result = validateDiscover(rec);
+  if (!result.ok) {
+    err(result.error ?? "rejected");
+    return 1;
+  }
+  appendLog(dir, rec);
+  out(`discovery ⟡ logged${rec.evidence?.artifact ? `  (${rec.evidence.artifact})` : ""} — parked off-goal`);
+  return 0;
+}
+
+/** An off-arm, off-frontier discovery record (arm:null, no decision). prd-discovery §4.1/§5. */
+function buildDiscovery(
+  observation: string,
+  flags: Record<string, string>,
+  workers: string[],
+  cites: string[],
+  log: LogRecord[],
+  now: string,
+): LogRecord {
+  const cycle = log.reduce((m, r) => Math.max(m, r.cycle), 0) + 1;
+
+  let evidence: Evidence | null = null;
+  if (flags.artifact || flags.class || flags.tier) {
+    evidence = {
+      class: (flags.class as Evidence["class"]) ?? "stated",
+      tier: (flags.tier as Evidence["tier"]) ?? "T2",
+      artifact: flags.artifact ?? null,
+      verdict: "claimed", // a discovery is stated/claimed until externally checked (prd-discovery §4.1)
+    };
+  }
+  const parsedWorkers: Worker[] = workers.map((w) => {
+    const [model, role] = w.split(":");
+    return { model: model ?? w, role: role ?? "worker" };
+  });
+
+  return {
+    ts: now,
+    cycle,
+    arm: null, // OFF-ARM — neutral to every breaker (prd-discovery §4.2)
+    target: null,
+    outcome: "discovery",
+    at: null,
+    note: observation,
+    question: flags.question ?? "",
+    evidence,
+    workers: parsedWorkers,
+    p_true: flags["p-true"] !== undefined ? Number(flags["p-true"]) : null,
+    p_audit: null,
+    decision: null, // a discovery is not a turn-ending decision
+    frontier_after: null,
+    supersedes: null,
+    wave: flags.wave,
+    cites: cites.length ? cites : undefined,
   };
 }
 

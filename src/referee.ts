@@ -23,7 +23,7 @@ import type {
 } from "./types";
 
 /** A decision is an "escape" from a tripped breaker iff it EXPLOREs a different arm or PIVOTs. */
-function isEscape(type: DecisionType, decisionArm: string, currentArm: string): boolean {
+function isEscape(type: DecisionType, decisionArm: string, currentArm: string | null): boolean {
   if (type === "PIVOT") return true;
   if (type === "EXPLORE" && decisionArm !== currentArm) return true;
   return false;
@@ -52,10 +52,21 @@ export function check(
   });
 
   const newThisTurn = log.slice(turn.log_len_at_turn_start);
-  const newest = log[log.length - 1];
+  // Off-arm `discovery ⟡` records are NOT a wave outcome and carry no decision, so the
+  // decision-bearing gates (G3/G4) read the newest ARM-PULL, and G1 counts arm-pulls only
+  // (a turn that logs only a discovery has not logged its wave outcome). prd-discovery §7.
+  const isPull = (r: LogRecord): boolean => r.outcome !== "discovery";
+  const newPulls = newThisTurn.filter(isPull);
+  let newest: LogRecord | undefined;
+  for (let i = log.length - 1; i >= 0; i--) {
+    if (isPull(log[i]!)) {
+      newest = log[i];
+      break;
+    }
+  }
 
   // ── G1 logged-this-turn ────────────────────────────────────────────────────
-  if (newThisTurn.length === 0) {
+  if (newPulls.length === 0) {
     return fail("G1", "No wave outcome logged this turn. Record it with `fr log …`.");
   }
 

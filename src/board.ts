@@ -20,22 +20,26 @@ import type {
   DerivedArm,
   DeadRoute,
   BankedResult,
+  Discovery,
   PromptHookOutput,
   StopHookOutput,
 } from "./types";
 
 const DEFAULT_MAX_DEAD = 6;
+const DEFAULT_MAX_DISC = 6;
 /** Hard note truncation so a single arm line can't blow the token budget. */
 const NOTE_CAP = 60;
 
 export interface BoardOpts {
   maxArms?: number;
   maxDead?: number;
+  maxDisc?: number;
 }
 
 export function renderBoard(state: DerivedState, opts: BoardOpts = {}): string {
   const maxArms = opts.maxArms ?? state.arms.length;
   const maxDead = opts.maxDead ?? DEFAULT_MAX_DEAD;
+  const maxDisc = opts.maxDisc ?? DEFAULT_MAX_DISC;
 
   const lines: string[] = [];
 
@@ -61,6 +65,12 @@ export function renderBoard(state: DerivedState, opts: BoardOpts = {}): string {
   if (state.deadRoutes.length > 0) {
     const shown = state.deadRoutes.slice(0, maxDead).map(deadClause).join("; ");
     lines.push(`DEAD ROUTES (do not re-walk): ${shown}`);
+  }
+
+  // ── DISCOVERIES tail (off-goal, parked — prd-discovery §8) ───────────────
+  if (state.discoveries.length > 0) {
+    const shown = state.discoveries.slice(0, maxDisc).map(discoveryClause).join("; ");
+    lines.push(`DISCOVERIES (off-goal, parked): ${shown}`);
   }
 
   return lines.join("\n");
@@ -108,6 +118,12 @@ function bankedClause(b: BankedResult): string {
 function deadClause(d: DeadRoute): string {
   const wave = d.killedByWave ? ` (${d.killedByWave})` : ` (c${d.killedAtCycle})`;
   return `${truncate(d.residual)}${wave}`;
+}
+
+/** A parked discovery, factual: ⟡ <obs> [class/tier] reuse×N. (prd-discovery §8) */
+function discoveryClause(d: Discovery): string {
+  const rung = d.tier ? ` [${d.class ?? "?"}/${d.tier}]` : "";
+  return `⟡ ${truncate(d.observation)}${rung}  reuse×${d.reuse}`;
 }
 
 /** Word-aware truncation: back up to the last space if one is reasonably close,

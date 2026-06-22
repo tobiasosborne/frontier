@@ -11,8 +11,12 @@
 // Vocabulary
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Outcome of one arm-pull. `died` is the modal, productive outcome (PRD §4.3). */
-export type Outcome = "banked" | "progress" | "died" | "refuted" | "null";
+/**
+ * Outcome of one arm-pull. `died` is the modal, productive outcome (PRD §4.3).
+ * `discovery` is OFF-ARM/OFF-FRONTIER — a parked off-goal result (prd-discovery §4.1); it
+ * carries `arm: null` and is neutral to the breaker.
+ */
+export type Outcome = "banked" | "progress" | "died" | "refuted" | "null" | "discovery";
 
 export const OUTCOME_GLYPH: Record<Outcome, string> = {
   banked: "▣",
@@ -20,6 +24,7 @@ export const OUTCOME_GLYPH: Record<Outcome, string> = {
   died: "✗",
   refuted: "⊘",
   null: "—",
+  discovery: "⟡",
 };
 
 /** Evidence class is an OPEN vocabulary; these are the well-known kinds. */
@@ -68,7 +73,7 @@ export interface LogRecord {
   ts: string; // ISO-8601
   cycle: number; // monotone index, 1-based
   wave?: string; // optional wave label e.g. "w37"
-  arm: string; // arm id this pull funded
+  arm: string | null; // arm id this pull funded; null ONLY for off-arm discovery records
   target: string | null; // the named open this pull attacked
   outcome: Outcome;
   /** Death certificate — the residual it died at. REQUIRED iff outcome === "died". */
@@ -83,6 +88,10 @@ export interface LogRecord {
   frontier_after?: string | null;
   /** cycle index of a prior record this one supersedes (retraction/downgrade). */
   supersedes?: number | null;
+  /** The Question (disprovability / why-it-matters). REQUIRED iff outcome === "discovery". prd-discovery §4.1. */
+  question?: string;
+  /** Artifact refs this pull/discovery builds on — drives the cross-thread `reuse` signal. prd-discovery §4.3. */
+  cites?: string[];
 }
 
 export interface ArmConfig {
@@ -175,6 +184,22 @@ export interface BankedResult {
   verified: boolean; // has a passing, non-stale verdict
 }
 
+/** Promotion state of an off-goal discovery (prd-discovery §4.4). D1 only yields `parked`. */
+export type DiscoveryStatus = "parked" | "promoted-arm" | "forked" | "decayed";
+
+/** A parked off-goal discovery, derived from `discovery ⟡` records (prd-discovery §4.2). */
+export interface Discovery {
+  cycle: number;
+  observation: string; // the note
+  question: string; // The Question (falsifier / why it matters)
+  class: EvidenceClass | null;
+  tier: Tier | null;
+  artifact: string | null;
+  /** Cross-thread reuse: distinct arms whose pulls `cites` this discovery's artifact. prd-discovery §4.3. */
+  reuse: number;
+  status: DiscoveryStatus;
+}
+
 export interface DerivedState {
   goal: string;
   frontier: string;
@@ -182,6 +207,7 @@ export interface DerivedState {
   arms: DerivedArm[];
   deadRoutes: DeadRoute[];
   banked: BankedResult[];
+  discoveries: Discovery[]; // parked off-goal results (prd-discovery §4.2)
   cycle: number; // last cycle index seen (0 if empty)
 }
 

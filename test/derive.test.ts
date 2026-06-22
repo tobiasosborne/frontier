@@ -352,3 +352,60 @@ describe("cycle", () => {
     expect(derive(portfolio(), log, []).cycle).toBe(8);
   });
 });
+
+// ── discoveries ledger (D1) ───────────────────────────────────────────────────
+describe("discoveries", () => {
+  test("a discovery record creates one ledger entry with its fields", () => {
+    const log: LogRecord[] = [
+      rec({
+        arm: null,
+        outcome: "discovery",
+        at: null,
+        decision: null,
+        note: "diagonal of the transfer matrix is itself row-stochastic",
+        question: "falsifier: a δ≤1/4 P whose diagonal is not stochastic",
+        evidence: ev({ artifact: "obs/diag", class: "side", tier: "T1" }),
+      }),
+    ];
+    const s = derive(portfolio(), log, []);
+    expect(s.discoveries.length).toBe(1);
+    const d = s.discoveries[0]!;
+    expect(d.observation).toBe("diagonal of the transfer matrix is itself row-stochastic");
+    expect(d.question).toBe("falsifier: a δ≤1/4 P whose diagonal is not stochastic");
+    expect(d.artifact).toBe("obs/diag");
+    expect(d.class).toBe("side");
+    expect(d.tier).toBe("T1");
+    expect(d.reuse).toBe(0);
+    expect(d.status).toBe("parked");
+  });
+
+  test("a discovery is breaker-NEUTRAL: not in any arm's pulls/stale/strip", () => {
+    const log: LogRecord[] = [
+      rec({ arm: "A", outcome: "died", at: "R1" }), // stale 1
+      rec({ arm: null, outcome: "discovery", at: null, decision: null, note: "off-goal", question: "q" }),
+      rec({ arm: "A", outcome: "died", at: "R1" }), // stale 2 — the discovery between did NOT reset it
+    ];
+    const a = armOf(derive(portfolio(), log, []), "A");
+    expect(a.stale).toBe(2); // breaker still trips; the discovery is invisible to the walk
+    expect(a.pulls).toBe(2); // discovery not counted as a pull
+    expect(a.strip).toBe("✗✗"); // no ⟡ in the strip
+  });
+
+  test("reuse counts DISTINCT citing arms (cross-thread), not citation count", () => {
+    const log: LogRecord[] = [
+      rec({ arm: null, outcome: "discovery", at: null, decision: null, note: "obs", question: "q", evidence: ev({ artifact: "obs/x" }) }),
+      rec({ arm: "A", outcome: "progress", at: null, evidence: ev({ artifact: "p/a" }), cites: ["obs/x"] }),
+      rec({ arm: "B", outcome: "died", at: "R", cites: ["obs/x"] }),
+      rec({ arm: "B", outcome: "died", at: "R", cites: ["obs/x"] }), // same arm again → still distinct {A,B}
+    ];
+    expect(derive(portfolio(), log, []).discoveries[0]!.reuse).toBe(2);
+  });
+
+  test("a superseded discovery drops from the live ledger", () => {
+    const log: LogRecord[] = [
+      rec({ cycle: 5, arm: null, outcome: "discovery", at: null, decision: null, note: "obs", question: "q" }),
+      rec({ cycle: 6, arm: "A", outcome: "died", at: "x", supersedes: 5 }),
+    ];
+    expect(derive(portfolio(), log, []).discoveries.length).toBe(0);
+  });
+});

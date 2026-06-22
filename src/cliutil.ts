@@ -14,17 +14,19 @@ export interface Parsed {
   pos: string[];
   flags: Record<string, string>;
   workers: string[];
+  cites: string[];
 }
 
 /**
- * Parse `<positionals> --flag value … --worker m:r … --decide <TYPE> <next-arm>`.
- * `--worker` repeats into `workers`; `--decide` consumes TWO values (PRD §6 surface), the
- * second stored as `flags["decide-arm"]`. A flag with no following value is "".
+ * Parse `<positionals> --flag value … --worker m:r … --cites ref … --decide <TYPE> <next-arm>`.
+ * `--worker` / `--cites` repeat into their arrays; `--decide` consumes TWO values (PRD §6 surface),
+ * the second stored as `flags["decide-arm"]`. A flag with no following value is "".
  */
 export function parseArgs(args: string[]): Parsed {
   const pos: string[] = [];
   const flags: Record<string, string> = {};
   const workers: string[] = [];
+  const cites: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a.startsWith("--")) {
@@ -32,6 +34,8 @@ export function parseArgs(args: string[]): Parsed {
       const val = args[i + 1] !== undefined && !args[i + 1]!.startsWith("--") ? args[++i]! : "";
       if (key === "worker") {
         workers.push(val);
+      } else if (key === "cites") {
+        if (val) cites.push(val);
       } else if (key === "decide") {
         flags.decide = val;
         if (args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) flags["decide-arm"] = args[++i]!;
@@ -42,5 +46,5 @@ export function parseArgs(args: string[]): Parsed {
       pos.push(a);
     }
   }
-  return { pos, flags, workers };
+  return { pos, flags, workers, cites };
 }

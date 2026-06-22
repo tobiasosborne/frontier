@@ -20,7 +20,7 @@ import type {
 } from "./types";
 
 /** A decision escapes a tripped breaker iff it EXPLOREs a different arm or PIVOTs. */
-function isEscape(type: DecisionType, decisionArm: string, currentArm: string): boolean {
+function isEscape(type: DecisionType, decisionArm: string, currentArm: string | null): boolean {
   if (type === "PIVOT") return true;
   if (type === "EXPLORE" && decisionArm !== currentArm) return true;
   return false;
@@ -32,6 +32,23 @@ function hasPassingVerdict(verdicts: Verdict[], artifact: string | null): boolea
 }
 
 const reject = (error: string): ValidationResult => ({ ok: false, error });
+
+/**
+ * Write-time validation for `fr discover` (prd-discovery §4.1, §6). A capture is cheap and
+ * liberal (notice-and-park), but it must carry the recognition step: an observation and
+ * Platt's "The Question" (what would falsify it / why it matters). PURE.
+ */
+export function validateDiscover(rec: LogRecord): ValidationResult {
+  if (!rec.note || !rec.note.trim()) {
+    return reject('A discovery needs an observation: fr discover "<observation>" --question "…".');
+  }
+  if (!rec.question || !rec.question.trim()) {
+    return reject(
+      'A discovery needs --question "<what would falsify this / why it matters>" (Platt\'s The Question). (`fr help discovery`)',
+    );
+  }
+  return { ok: true };
+}
 
 export function validateLog(
   p: Portfolio,

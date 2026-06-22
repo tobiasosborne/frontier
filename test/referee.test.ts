@@ -65,6 +65,7 @@ function state(arms: DerivedArm[], over: Partial<DerivedState> = {}): DerivedSta
     arms,
     deadRoutes: [],
     banked: [],
+    discoveries: [],
     cycle: arms.length,
     ...over,
   };
@@ -274,6 +275,24 @@ describe("pass", () => {
     const res = check(state([arm()]), turn(), [r], portfolio(), []);
     expect(res.status).toBe("pass");
     expect(res.gate).toBeUndefined();
+  });
+});
+
+// ── discovery (D1) interactions: G1 counts arm-pulls only; G4 ignores a trailing ⟡ ──
+
+describe("discovery (D1)", () => {
+  test("G1 still blocks when ONLY a discovery was logged this turn (no wave outcome)", () => {
+    const disc = rec({ arm: null, outcome: "discovery", at: null, decision: null, note: "obs", question: "q" });
+    const res = check(state([arm()]), turn({ log_len_at_turn_start: 0 }), [disc], portfolio(), []);
+    expect(res.status).toBe("block");
+    expect(res.gate).toBe("G1");
+  });
+
+  test("a trailing discovery does NOT spuriously trip G4 after a decided arm-pull", () => {
+    const pull = rec({ arm: "A", outcome: "died", at: "R1", decision: decision("EXPLOIT", "A") });
+    const disc = rec({ arm: null, outcome: "discovery", at: null, decision: null, note: "obs", question: "q" });
+    const res = check(state([arm()]), turn({ log_len_at_turn_start: 0 }), [pull, disc], portfolio(), []);
+    expect(res.status).toBe("pass");
   });
 });
 

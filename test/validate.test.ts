@@ -8,7 +8,7 @@
  *   not an escape — plus a happy-path {ok:true}.
  */
 import { test, expect, describe } from "bun:test";
-import { validateLog } from "../src/validate";
+import { validateLog, validateDiscover } from "../src/validate";
 import type {
   Portfolio,
   DerivedState,
@@ -62,6 +62,7 @@ function state(arms: DerivedArm[], over: Partial<DerivedState> = {}): DerivedSta
     arms,
     deadRoutes: [],
     banked: [],
+    discoveries: [],
     cycle: arms.length,
     ...over,
   };
@@ -226,6 +227,40 @@ describe("decision-arm-unregistered", () => {
     );
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/arm/i);
+  });
+});
+
+// ── validateDiscover (D1): capture ritual ───────────────────────────────────
+
+describe("validateDiscover", () => {
+  function disc(over: Partial<LogRecord> = {}): LogRecord {
+    return rec({
+      arm: null,
+      outcome: "discovery",
+      at: null,
+      decision: null,
+      note: "an off-goal observation",
+      question: "what would falsify this / why it matters",
+      ...over,
+    });
+  }
+
+  test("rejects a discovery with no observation", () => {
+    const res = validateDiscover(disc({ note: "" }));
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/observation/i);
+  });
+
+  test("rejects a discovery with no --question (Platt's The Question)", () => {
+    const res = validateDiscover(disc({ question: "" }));
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/question/i);
+  });
+
+  test("accepts a well-formed discovery", () => {
+    const res = validateDiscover(disc());
+    expect(res.ok).toBe(true);
+    expect(res.error).toBeUndefined();
   });
 });
 

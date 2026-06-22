@@ -21,8 +21,8 @@ THE PER-TURN RITUAL (this is the whole protocol):
     ▣ banked (needs \`fr verify\`)  △ progress (needs --artifact)  ✗ died (needs --at)
     ⊘ refuted  — null
 
-COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  verify  board  check  turn-begin  status  help
-CONCEPTS  (\`fr help <topic>\`): workflow  outcomes  breaker  bank-gate  evidence  arms  frontier  oracles  hooks
+COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  verify  board  check  turn-begin  status  help
+CONCEPTS  (\`fr help <topic>\`): workflow  outcomes  breaker  bank-gate  evidence  arms  frontier  discovery  oracles  hooks
 
 The board (injected each turn) is your live FRONTIER + portfolio scoreboard + dead routes.`;
 
@@ -53,6 +53,15 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   e.g.  fr log A progress "lit confirms reduction" --artifact lit/x.md --class lit --tier T2 --decide EXPLOIT A
         fr log C died "symmetry fails" --at "constraint non-convex" --worker opus:prover --decide PIVOT C
   (\`fr help outcomes\`, \`fr help evidence\`)`,
+
+  discover: `fr discover "<observation>" --question "<falsifier / why it matters>" \\
+       [--artifact <ref> --class <c> --tier T0|T1|T2] [--cites <ref>]...
+  Park an OFF-GOAL discovery — an interesting/useful side result the current FRONTIER did not
+  ask for. Off-arm and breaker-NEUTRAL: it neither resets nor trips the stall breaker, and it
+  does NOT count as your turn's wave outcome (still log an arm-pull). --question is required
+  (Platt's "The Question": what would falsify it / why it matters) and is the bar for promotion.
+  A discovery is class=stated until externally checked. Later arm-pulls that --cites its artifact
+  raise its cross-thread "reuse" on the board.  (\`fr help discovery\`)`,
 
   verify: `fr verify <claim> --oracle <name>
   Run a registered oracle (argv, NO shell; claim text on stdin) → a PASS/FAIL verdict, the
@@ -120,6 +129,15 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   --tier (rigour): T0 proof/theorem · T1 certified computation (exact / interval+error theorem)
     · T2 floats & literature numerics.
   The board shows each arm's BEST tier reached. A numeric △ is weak; a verified ▣ at T0 is strong.`,
+
+  discovery: `DISCOVERY (off-goal results, parked)
+  The breaker measures progress against the locked FRONTIER, so a genuine OFF-goal result reads
+  as "no progress" and could even trip it — the anti-tunnel-vision rule is also anti-serendipity.
+  \`fr discover\` gives off-goal results their own channel: a ⟡ record that is breaker-NEUTRAL,
+  trusted WEAKER than a banked result (class=stated until checked), and parked in a discoveries
+  ledger on the board. Capture is cheap; --question (Platt's The Question) is the recognition
+  step. A discovery earns promotion by cross-thread "reuse" — a later pull on a DIFFERENT arm
+  citing it (--cites). (Promotion to a new arm/goal is a later phase.)  (\`fr help breaker\`)`,
 
   arms: `ARMS (the portfolio)
   Each arm is one approach, with a priority (primary/exploratory/support/background/logged/dead

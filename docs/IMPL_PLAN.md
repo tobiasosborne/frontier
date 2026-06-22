@@ -179,3 +179,45 @@ restore); run `bun test <their files>` and report pass counts + any perturbation
 script 1–8 pass via integration · a `hooks/settings.json` snippet (PRD §9) + a short `README` deploy note exist.
 Live hook test (§14 #10–12) is out of this session (needs a Claude Code session in a target repo) — leave a
 documented manual checklist.
+
+## 6. D1 — discovery ledger (capture + ledger)
+
+Spec: `docs/prd-discovery.md` §10 (D1). Scope: `fr discover` (+ The Question), the `discovery ⟡` outcome,
+breaker-neutrality, the derived discoveries ledger, the board block, the G1 fix. **Signal: cross-thread
+`reuse` only** (learning-progress/surprise + promote/fork are D2/D3). No fork, no promote-to-arm.
+
+**Key simplification:** a discovery record carries `arm: null`, and `deriveArm` filters `r.arm === arm.id`,
+so discoveries are **already excluded** from every arm's `pulls`/`stale`/`strip`/`bestTier` — breaker
+neutrality needs no gate surgery, only a regression test (L1: perturb the filter → RED → restore).
+
+### 6.1 Type deltas (`src/types.ts`)
+- `Outcome` gains `"discovery"`; `OUTCOME_GLYPH.discovery = "⟡"`.
+- `LogRecord.arm: string | null` (null only for discovery/fork records); add `question?: string`, `cites?: string[]`.
+- `DiscoveryStatus = "parked" | "promoted-arm" | "forked" | "decayed"` (D1 only ever yields `parked`).
+- `interface Discovery { cycle; observation; question; class: EvidenceClass|null; tier: Tier|null; artifact: string|null; reuse: number; status: DiscoveryStatus }`.
+- `DerivedState` gains `discoveries: Discovery[]`.
+
+### 6.2 Module deltas
+- **`derive.ts`** — new `deriveDiscoveries(log, isLive)`: one `Discovery` per live `outcome:"discovery"` record;
+  `reuse` = # of **distinct arms** among non-discovery records whose `cites` includes the discovery's
+  `artifact`; `status:"parked"`. Add `discoveries` to the return. Guard `if (r.arm == null) continue` in the
+  dead-routes + banked loops so `arm:string` stays sound.
+- **`referee.ts`** — G1 counts **arm-pulls only**: block iff `newThisTurn.filter(r=>r.outcome!=="discovery")`
+  is empty (a turn that logs only a discovery has not logged its wave outcome). G3/G4 operate on
+  `newestPull` = last non-discovery record (so a trailing discovery can't spuriously trip G4).
+- **`validate.ts`** — new pure `validateDiscover(rec)`: reject empty observation; reject missing `--question`.
+- **`board.ts`** — a bounded `DISCOVERIES (off-goal)` tail block (factual phrasing; `⟡ <obs> [class/tier]
+  reuse×N`), shown only when non-empty; `BoardOpts.maxDisc` (default 6).
+- **`cliutil.ts`** — `parseArgs` collects repeated `--cites` into `cites: string[]`.
+- **`commands.ts`** — `cmdDiscover(dir, rest, now)` (build record → `validateDiscover` → append); `cmdLog`/
+  `buildRecord` thread `--cites` onto the record.
+- **`cli.ts`** — dispatch `discover`. **`help.ts`** — `discover` command + `discovery` concept; COMMANDS list.
+
+### 6.3 TDD matrix (D1)
+| Test file | Asserts |
+|---|---|
+| `derive.test.ts` | a `discovery` record creates a `discoveries[]` entry (obs/question/class/tier/artifact); **does NOT appear in any arm's `pulls`/`stale`/`strip`** (breaker-neutral, between two stalling pulls); `reuse` counts distinct citing arms; superseded discovery drops from the ledger |
+| `referee.test.ts` | G1 **still blocks** when only a discovery was logged this turn; G4 does not fire when a discovery trails a decided arm-pull |
+| `validate.test.ts` | `validateDiscover` rejects missing observation; rejects missing `--question`; accepts a well-formed discovery |
+| `board.test.ts` | the `DISCOVERIES` block renders `⟡` + `reuse×N`, factual (no imperative tokens), absent when empty |
+| `integration.test.ts` | `fr discover "x" --question "q"` appends `⟡` with `arm:null`; G1 still blocks a discovery-only turn; a later `fr log … --cites <artifact>` raises `reuse` on the board |

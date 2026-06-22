@@ -279,3 +279,47 @@ describe("§14 #8 board: ?? untried + dead routes", () => {
     expect(out.hookSpecificOutput.additionalContext).toContain("FRONTIER");
   });
 });
+
+// ── D1: discovery capture + ledger ───────────────────────────────────────────
+
+describe("D1 discovery", () => {
+  test("fr discover appends a ⟡ record with arm:null and The Question", () => {
+    init();
+    beginTurn();
+    const res = fr("discover", "diagonal is row-stochastic", "--question", "what would falsify it", "--artifact", "obs/diag", "--class", "side", "--tier", "T1");
+    expect(res.code).toBe(0);
+    const rec = JSON.parse(fs.readFileSync(path.join(frontierDir, "log.jsonl"), "utf8").trim());
+    expect(rec.outcome).toBe("discovery");
+    expect(rec.arm).toBeNull();
+    expect(rec.question).toBe("what would falsify it");
+    expect(rec.evidence.artifact).toBe("obs/diag");
+  });
+
+  test("fr discover without --question is rejected at write time", () => {
+    init();
+    beginTurn();
+    const res = fr("discover", "an observation");
+    expect(res.code).toBe(1);
+    expect(res.stderr.toLowerCase()).toContain("question");
+    expect(fs.existsSync(path.join(frontierDir, "log.jsonl"))).toBe(false);
+  });
+
+  test("a discovery-only turn still BLOCKS at the Stop hook (G1 counts arm-pulls)", () => {
+    init();
+    beginTurn();
+    fr("discover", "off-goal observation", "--question", "q");
+    const out = JSON.parse(fr("check", "--hook", "stop").stdout);
+    expect(out.decision).toBe("block");
+  });
+
+  test("a later pull citing a discovery raises its reuse on the board", () => {
+    init();
+    beginTurn();
+    fr("discover", "useful lemma", "--question", "q", "--artifact", "obs/lem", "--class", "side", "--tier", "T1");
+    fr("log", "A", "progress", "used the lemma", "--artifact", "p/a", "--class", "af", "--tier", "T0", "--cites", "obs/lem", "--decide", "EXPLOIT", "A");
+    const board = fr("board").stdout;
+    expect(board).toContain("DISCOVERIES");
+    expect(board).toContain("useful lemma");
+    expect(board).toContain("reuse×1");
+  });
+});

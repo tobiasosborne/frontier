@@ -16,7 +16,7 @@ import {
   stopBlock,
   stopSoft,
 } from "../src/board";
-import type { DerivedState, DerivedArm, DeadRoute, BankedResult } from "../src/types";
+import type { DerivedState, DerivedArm, DeadRoute, BankedResult, Discovery } from "../src/types";
 
 // ── fixture builders ────────────────────────────────────────────────────────
 
@@ -47,6 +47,7 @@ function state(over: Partial<DerivedState> = {}): DerivedState {
     arms: [arm()],
     deadRoutes: [],
     banked: [],
+    discoveries: [],
     cycle: 6,
     ...over,
   };
@@ -207,6 +208,43 @@ describe("renderBoard DEAD ROUTES", () => {
   test("no DEAD ROUTES block when there are none", () => {
     const out = renderBoard(state({ deadRoutes: [] }));
     expect(out).not.toContain("DEAD ROUTES");
+  });
+});
+
+// ── DISCOVERIES tail (D1) ────────────────────────────────────────────────────
+
+describe("renderBoard DISCOVERIES", () => {
+  function discovery(over: Partial<Discovery> = {}): Discovery {
+    return {
+      cycle: 41,
+      observation: "diagonal is row-stochastic",
+      question: "what would falsify it",
+      class: "side",
+      tier: "T1",
+      artifact: "obs/diag",
+      reuse: 2,
+      status: "parked",
+      ...over,
+    };
+  }
+
+  test("renders a discoveries tail with ⟡, the observation, class/tier and reuse×N", () => {
+    const out = renderBoard(state({ discoveries: [discovery()] }));
+    expect(out).toContain("DISCOVERIES");
+    expect(out).toContain("⟡");
+    expect(out).toContain("diagonal is row-stochastic");
+    expect(out).toContain("reuse×2");
+  });
+
+  test("no DISCOVERIES block when there are none", () => {
+    expect(renderBoard(state({ discoveries: [] }))).not.toContain("DISCOVERIES");
+  });
+
+  test("the discoveries block stays factual (no imperatives)", () => {
+    const out = renderBoard(
+      state({ discoveries: [discovery(), discovery({ observation: "spectral gap tracks δ²", reuse: 0 })] }),
+    );
+    expect(out).not.toMatch(/\b(must|should|switch now|you need to)\b/i);
   });
 });
 
