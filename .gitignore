@@ -12,3 +12,6 @@ dist/
 
 # agent tooling staged by plugins — not part of the tool
 .claude/
+
+# local ground-truth: downloaded source PDFs backing docs/research/ (heavy, not committed)
+docs/research/ground-truth/
