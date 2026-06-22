@@ -101,6 +101,8 @@ export interface ArmConfig {
   target: string | null;
   kill: string | null; // pre-registered kill criterion
   created: string; // ISO-8601
+  /** cycle of the discovery this arm was promoted from (`fr arm add --from-discovery`). prd-discovery §4.4. */
+  from_discovery?: number;
 }
 
 /** A registered external oracle for `fr verify` (PRD §7). Runs as argv, NO shell. */
@@ -197,6 +199,10 @@ export interface Discovery {
   artifact: string | null;
   /** Cross-thread reuse: distinct arms whose pulls `cites` this discovery's artifact. prd-discovery §4.3. */
   reuse: number;
+  /** A citing pull MOVED (reduced the frontier / banked / progressed) — it unstuck a thread. F7. */
+  learningProgress: boolean;
+  /** Landed a usable artifact despite a low pre-registered `p_true` (advisory; unexpected AND relevant). F6. */
+  surprise: boolean;
   status: DiscoveryStatus;
 }
 

@@ -323,3 +323,30 @@ describe("D1 discovery", () => {
     expect(board).toContain("reuse×1");
   });
 });
+
+// ── D2: promote-to-arm ───────────────────────────────────────────────────────
+
+describe("D2 promote-to-arm", () => {
+  test("fr arm add --from-discovery seeds a new arm and promotes the discovery off the parked tail", () => {
+    init();
+    beginTurn();
+    fr("discover", "a reusable lemma", "--question", "q", "--artifact", "obs/lem", "--class", "side", "--tier", "T1");
+    const add = fr("arm", "add", "P", "--from-discovery", "1");
+    expect(add.code).toBe(0);
+    const p = JSON.parse(fs.readFileSync(path.join(frontierDir, "portfolio.json"), "utf8"));
+    const armP = p.arms.find((a: { id: string }) => a.id === "P");
+    expect(armP).toBeDefined();
+    expect(armP.from_discovery).toBe(1);
+    expect(armP.desc).toContain("reusable lemma"); // desc seeded from the observation
+    const board = fr("board").stdout;
+    expect(board).toContain("P"); // the new arm is present
+    expect(board).not.toContain("DISCOVERIES"); // promoted → no longer parked
+  });
+
+  test("fr arm add --from-discovery on a nonexistent cycle is rejected", () => {
+    init();
+    const add = fr("arm", "add", "P", "--from-discovery", "99");
+    expect(add.code).toBe(1);
+    expect(add.stderr.toLowerCase()).toContain("discovery");
+  });
+});

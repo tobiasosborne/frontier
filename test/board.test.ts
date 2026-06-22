@@ -223,6 +223,8 @@ describe("renderBoard DISCOVERIES", () => {
       tier: "T1",
       artifact: "obs/diag",
       reuse: 2,
+      learningProgress: false,
+      surprise: false,
       status: "parked",
       ...over,
     };
@@ -245,6 +247,26 @@ describe("renderBoard DISCOVERIES", () => {
       state({ discoveries: [discovery(), discovery({ observation: "spectral gap tracks δ²", reuse: 0 })] }),
     );
     expect(out).not.toMatch(/\b(must|should|switch now|you need to)\b/i);
+  });
+
+  test("shows ⟲ for a learning-progress discovery", () => {
+    const out = renderBoard(state({ discoveries: [discovery({ learningProgress: true })] }));
+    expect(out).toContain("⟲");
+  });
+
+  test("only PARKED discoveries appear in the tail — decayed/promoted are hidden", () => {
+    const out = renderBoard(
+      state({
+        discoveries: [
+          discovery({ observation: "kept parked" }),
+          discovery({ observation: "aged out", status: "decayed" }),
+          discovery({ observation: "became an arm", status: "promoted-arm" }),
+        ],
+      }),
+    );
+    expect(out).toContain("kept parked");
+    expect(out).not.toContain("aged out");
+    expect(out).not.toContain("became an arm");
   });
 });
 

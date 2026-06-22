@@ -213,7 +213,7 @@ neutrality needs no gate surgery, only a regression test (L1: perturb the filter
   `buildRecord` thread `--cites` onto the record.
 - **`cli.ts`** — dispatch `discover`. **`help.ts`** — `discover` command + `discovery` concept; COMMANDS list.
 
-### 6.3 TDD matrix (D1)
+### 6.3 TDD matrix (D1) — built
 | Test file | Asserts |
 |---|---|
 | `derive.test.ts` | a `discovery` record creates a `discoveries[]` entry (obs/question/class/tier/artifact); **does NOT appear in any arm's `pulls`/`stale`/`strip`** (breaker-neutral, between two stalling pulls); `reuse` counts distinct citing arms; superseded discovery drops from the ledger |
@@ -221,3 +221,26 @@ neutrality needs no gate surgery, only a regression test (L1: perturb the filter
 | `validate.test.ts` | `validateDiscover` rejects missing observation; rejects missing `--question`; accepts a well-formed discovery |
 | `board.test.ts` | the `DISCOVERIES` block renders `⟡` + `reuse×N`, factual (no imperative tokens), absent when empty |
 | `integration.test.ts` | `fr discover "x" --question "q"` appends `⟡` with `arm:null`; G1 still blocks a discovery-only turn; a later `fr log … --cites <artifact>` raises `reuse` on the board |
+
+## 7. D2 — promotion + signals (built)
+
+Spec: `docs/prd-discovery.md` §10 (D2). Adds the learning-progress + surprise signals, the decay
+policy (Decision B), and Rung-2 promote-to-arm. Decisions taken (the proposed defaults): **A** —
+fork-eligible at `reuse ≥ 2` **or** learning-progress; **B** — rigour-weighted decay that hides, never
+deletes (a reuse-0, non-`T0` discovery older than `DECAY_AFTER_CYCLES = 8` → `status:decayed`, off the
+board; the log record stays).
+
+- **`types.ts`** — `Discovery` gains `learningProgress`/`surprise`; `ArmConfig.from_discovery?`.
+- **`derive.ts`** — `deriveDiscoveries(log, isLive, arms, currentCycle)`: `learningProgress` = a citing
+  pull MOVED (`MOVING_OUTCOMES` or `frontier_after`); `surprise` = artifact + `p_true ≤ SURPRISE_PRIOR
+  (0.25)`; `status` ∈ promoted-arm (an arm's `from_discovery` names it) → decayed → parked.
+- **`board.ts`** — only `status==="parked"` discoveries surface; clause adds `⟲` (learning-progress) /
+  `surprise`.
+- **`commands.ts`** — `fr arm add <id> --from-discovery <cycle>` seeds an arm from the discovery
+  (desc ← observation), rejects a nonexistent cycle.
+
+| Test file | Asserts (D2) |
+|---|---|
+| `derive.test.ts` | `learningProgress` true only when a citing pull moves; `surprise` on low-prior+artifact; `status` promoted-arm / decayed (T0 sticky, reuse-0 + old) |
+| `board.test.ts` | `⟲` for learning-progress; only PARKED discoveries surface (decayed/promoted hidden) |
+| `integration.test.ts` | `fr arm add P --from-discovery <c>` seeds the arm + promotes it off the parked tail; nonexistent cycle rejected |

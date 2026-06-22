@@ -32,6 +32,11 @@ const TIER_RANK: Record<Tier, number> = { T0: 0, T1: 1, T2: 2 };
 /** A pull whose outcome is one of these always "moves" the frontier. */
 const MOVING_OUTCOMES = new Set(["banked", "progress", "refuted"]);
 
+/** `surprise` = a usable artifact landed despite a pre-registered prior at or below this (prd-discovery §4.3). */
+const SURPRISE_PRIOR = 0.25;
+/** A parked, reuse-0, non-T0 discovery older than this many cycles decays off the board tail (Decision B). */
+const DECAY_AFTER_CYCLES = 8;
+
 /** Map a raw model string to its provider family. */
 function family(model: string): string {
   const m = model.toLowerCase();
@@ -114,42 +119,75 @@ export function derive(
     });
   }
 
-  // ── discoveries ledger: live `discovery` records, with cross-thread `reuse`
-  //    (prd-discovery §4.2). Off-arm by construction, so neutral to every breaker.
-  const discoveries = deriveDiscoveries(log, isLive);
-
   const cycle = log.reduce((max, r) => (r.cycle > max ? r.cycle : max), 0);
+
+  // ── discoveries ledger: live `discovery` records, with cross-thread `reuse`,
+  //    learning-progress / surprise signals, and promotion/decay status
+  //    (prd-discovery §4.2–4.4). Off-arm by construction, so neutral to every breaker.
+  const discoveries = deriveDiscoveries(log, isLive, p.arms, cycle);
 
   return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, discoveries, cycle };
 }
 
 // ── discoveries ledger ───────────────────────────────────────────────────────
 
-function deriveDiscoveries(log: LogRecord[], isLive: (r: LogRecord) => boolean): Discovery[] {
+function deriveDiscoveries(
+  log: LogRecord[],
+  isLive: (r: LogRecord) => boolean,
+  arms: Portfolio["arms"],
+  currentCycle: number,
+): Discovery[] {
+  const promotedCycles = new Set<number>();
+  for (const a of arms) if (a.from_discovery != null) promotedCycles.add(a.from_discovery);
+
   const out: Discovery[] = [];
   for (const r of log) {
     if (r.outcome !== "discovery" || !isLive(r)) continue;
     const artifact = r.evidence?.artifact ?? null;
-    // reuse = DISTINCT arms whose (non-discovery) pulls cite this discovery's artifact
-    // — POET's "transfer is load-bearing" signal, cross-THREAD not citation count.
+    const tier = r.evidence?.tier ?? null;
+
+    // reuse = DISTINCT arms whose (non-discovery) pulls cite this artifact (cross-THREAD,
+    // not citation count). learningProgress = at least one of those citing pulls MOVED
+    // (frontier reduction or banked/progress/refuted) — the discovery unstuck a thread (F7).
     let reuse = 0;
+    let learningProgress = false;
     if (artifact != null) {
       const citingArms = new Set<string>();
       for (const o of log) {
         if (o.outcome === "discovery" || o.arm == null) continue;
-        if ((o.cites ?? []).includes(artifact)) citingArms.add(o.arm);
+        if (!(o.cites ?? []).includes(artifact)) continue;
+        citingArms.add(o.arm);
+        if (MOVING_OUTCOMES.has(o.outcome) || o.frontier_after != null) learningProgress = true;
       }
       reuse = citingArms.size;
     }
+
+    // surprise = a usable artifact landed despite a low pre-registered prior (unexpected AND
+    // relevant — F6). Advisory only, never gates.
+    const surprise = artifact != null && r.p_true != null && r.p_true <= SURPRISE_PRIOR;
+
+    // status (Decision A/B): promoted-arm (an arm seeded from it) outranks decay; a parked,
+    // reuse-0, non-T0 discovery older than the decay window ages off the board tail.
+    let status: Discovery["status"];
+    if (promotedCycles.has(r.cycle)) {
+      status = "promoted-arm";
+    } else if (reuse === 0 && tier !== "T0" && currentCycle - r.cycle >= DECAY_AFTER_CYCLES) {
+      status = "decayed";
+    } else {
+      status = "parked";
+    }
+
     out.push({
       cycle: r.cycle,
       observation: r.note,
       question: r.question ?? "",
       class: r.evidence?.class ?? null,
-      tier: r.evidence?.tier ?? null,
+      tier,
       artifact,
       reuse,
-      status: "parked", // promoted-arm/forked/decayed are D2/D3
+      learningProgress,
+      surprise,
+      status,
     });
   }
   return out;

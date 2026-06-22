@@ -32,10 +32,12 @@ const TOPICS: Record<string, string> = {
   Next: \`fr arm add\` your approaches, then \`fr frontier "<the live open>"\`.`,
 
   arm: `fr arm add <id> "<desc>" [--priority P] [--target "<open>"] [--kill "<criterion>"]
+fr arm add <id> --from-discovery <cycle>    # promote a parked discovery into a new arm
 fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   Register / re-aim an approach ("arm"). P ∈ primary | exploratory | support | background |
   logged | dead (graded funding — demote, don't delete). --target = the named open this arm
-  attacks; --kill = the pre-registered condition to abandon it.  (\`fr help arms\`)`,
+  attacks; --kill = the pre-registered condition to abandon it. --from-discovery seeds the arm
+  from an off-goal discovery (same goal, new route).  (\`fr help arms\`, \`fr help discovery\`)`,
 
   frontier: `fr frontier "<the single live named open>"
   Record a FRONTIER reduction — the one open problem the campaign is currently on. As waves
@@ -135,9 +137,12 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   as "no progress" and could even trip it — the anti-tunnel-vision rule is also anti-serendipity.
   \`fr discover\` gives off-goal results their own channel: a ⟡ record that is breaker-NEUTRAL,
   trusted WEAKER than a banked result (class=stated until checked), and parked in a discoveries
-  ledger on the board. Capture is cheap; --question (Platt's The Question) is the recognition
-  step. A discovery earns promotion by cross-thread "reuse" — a later pull on a DIFFERENT arm
-  citing it (--cites). (Promotion to a new arm/goal is a later phase.)  (\`fr help breaker\`)`,
+  ledger on the board. Capture is cheap; --question (Platt's The Question) is the recognition step.
+  SIGNALS on the board: reuse×N (distinct DIFFERENT arms citing it via --cites — the promotion
+  bar), ⟲ (learning-progress: a citing pull MOVED the frontier), surprise (landed despite a low
+  --p-true). A reuse-0, low-tier discovery decays off the board after a while (the record stays).
+  PROMOTE: \`fr arm add <id> --from-discovery <cycle>\` turns it into a new arm (same goal).
+  (\`fr help breaker\`, \`fr help arm\`)`,
 
   arms: `ARMS (the portfolio)
   Each arm is one approach, with a priority (primary/exploratory/support/background/logged/dead

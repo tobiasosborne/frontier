@@ -268,11 +268,11 @@ DISCOVERIES (off-goal, parked):
   (acceptance §11).
 
 ## 10. Phasing
-- **D1 — capture + ledger.** `fr discover` (+ The Question), `outcome:"discovery"`, breaker-neutrality, the
-  derived ledger, the board block, G1 fix. Signals: **reuse** only. *No fork.* (Self-contained, shippable.)
-- **D2 — promotion + signals.** `fr arm add --from-discovery` (Rung 2); learning-progress + surprise signals;
-  decay policy (Decision B). 
-- **D3 — fork.** `fr fork`, GF, child scaffolding + provenance, the parent supersession record. The
+- **D1 — capture + ledger. ✅ built.** `fr discover` (+ The Question), `outcome:"discovery"`,
+  breaker-neutrality, the derived ledger, the board block, G1 fix. Signals: **reuse** only.
+- **D2 — promotion + signals. ✅ built.** `fr arm add --from-discovery` (Rung 2); learning-progress + surprise
+  signals; decay policy (Decision B).
+- **D3 — fork.** `fr fork`, GF, child scaffolding + provenance, the parent fork-marker record. The
   anti-theatre `progress` tightening (Decision C) is **deferred, not part of D3** — held as a ready drop-in,
   flipped on only if instrumentation shows persistent progress-theatre.
 
@@ -293,14 +293,15 @@ DISCOVERIES (off-goal, parked):
 8. *(If Decision C accepted)* a `progress` with no `frontier_after` and no later `--cites` reuse does **not**
    reset the breaker; one that reduces the frontier does.
 
-## 12. Open decisions (proposed defaults; resolve before D2/D3)
-- **A — `k_fork` (fork reuse threshold).** *Proposed:* `reuse ≥ 2` **or** demonstrated learning-progress
-  (either suffices). Rationale: 2 distinct threads reusing a result is POET's "transfer is load-bearing"
-  signal (F9); requiring *both* would over-gate a genuinely cross-cutting one-reuse-plus-unstuck discovery.
-- **B — decay policy for un-reused, un-tested parked discoveries.** *Proposed:* reuse the rigour-weighted decay
-  (canonical §4.6) — a `T2/stated` discovery with `reuse 0` ages to `status:decayed` (drops off the board tail
-  after N cycles), a `banked`-grade one is sticky. The archive (F5) argues *never delete* — decay only changes
-  **surfacing**, the record stays in the log. *(Alternative: keep all discoveries on the board forever.)*
+## 12. Decisions (resolved)
+- **A — `k_fork` (fork reuse threshold).** **Resolved 2026-06-22 — `reuse ≥ 2` OR demonstrated
+  learning-progress (either suffices).** Rationale: 2 distinct threads reusing a result is POET's "transfer is
+  load-bearing" signal (F9); requiring *both* would over-gate a genuinely cross-cutting
+  one-reuse-plus-unstuck discovery. (Enforced by GF in D3.)
+- **B — decay policy for un-reused, un-tested parked discoveries.** **Resolved 2026-06-22 — rigour-weighted
+  decay that HIDES, never deletes.** A non-`T0` discovery with `reuse 0` older than `DECAY_AFTER_CYCLES = 8`
+  → `status:decayed` (drops off the board tail), a `T0` one is sticky. Per the archive principle (F5) the log
+  record always stays — decay only changes **surfacing**. (Built in D2: `derive.deriveDiscoveries`.)
 - **C — fold in the `progress`-resets-breaker tightening (§4.6)?** **Resolved 2026-06-22 — DEFER, no change.**
   Progress-theatre is not (yet) a demonstrated failure mode, and editing a locked decision (canonical §15.1)
   speculatively isn't warranted; canonical §15.1 is **untouched**. The §4.6 rule is held as a ready drop-in.

@@ -67,9 +67,12 @@ export function renderBoard(state: DerivedState, opts: BoardOpts = {}): string {
     lines.push(`DEAD ROUTES (do not re-walk): ${shown}`);
   }
 
-  // ── DISCOVERIES tail (off-goal, parked — prd-discovery §8) ───────────────
-  if (state.discoveries.length > 0) {
-    const shown = state.discoveries.slice(0, maxDisc).map(discoveryClause).join("; ");
+  // ── DISCOVERIES tail (off-goal — prd-discovery §8) ───────────────────────
+  // Only PARKED discoveries surface; promoted/forked/decayed are tracked in the
+  // ledger but drop off the board (decay changes surfacing, not the record — Decision B).
+  const parked = state.discoveries.filter((d) => d.status === "parked");
+  if (parked.length > 0) {
+    const shown = parked.slice(0, maxDisc).map(discoveryClause).join("; ");
     lines.push(`DISCOVERIES (off-goal, parked): ${shown}`);
   }
 
@@ -120,10 +123,12 @@ function deadClause(d: DeadRoute): string {
   return `${truncate(d.residual)}${wave}`;
 }
 
-/** A parked discovery, factual: ⟡ <obs> [class/tier] reuse×N. (prd-discovery §8) */
+/** A parked discovery, factual: ⟡ <obs> [class/tier] reuse×N [⟲] [surprise]. (prd-discovery §8) */
 function discoveryClause(d: Discovery): string {
   const rung = d.tier ? ` [${d.class ?? "?"}/${d.tier}]` : "";
-  return `⟡ ${truncate(d.observation)}${rung}  reuse×${d.reuse}`;
+  const lp = d.learningProgress ? " ⟲" : "";
+  const sp = d.surprise ? " surprise" : "";
+  return `⟡ ${truncate(d.observation)}${rung}  reuse×${d.reuse}${lp}${sp}`;
 }
 
 /** Word-aware truncation: back up to the last space if one is reasonably close,

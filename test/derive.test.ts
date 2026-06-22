@@ -409,3 +409,57 @@ describe("discoveries", () => {
     expect(derive(portfolio(), log, []).discoveries.length).toBe(0);
   });
 });
+
+// ── discovery signals + promotion/decay (D2) ──────────────────────────────────
+describe("discovery signals (D2)", () => {
+  function disc(over: Partial<LogRecord> = {}): LogRecord {
+    return rec({ arm: null, outcome: "discovery", at: null, decision: null, note: "obs", question: "q", ...over });
+  }
+
+  test("learningProgress: true when a citing pull MOVES, false on a non-moving died", () => {
+    const moved = [
+      disc({ evidence: ev({ artifact: "obs/x" }) }),
+      rec({ arm: "A", outcome: "progress", at: null, evidence: ev({ artifact: "p/a" }), cites: ["obs/x"] }),
+    ];
+    expect(derive(portfolio(), moved, []).discoveries[0]!.learningProgress).toBe(true);
+
+    const stuck = [
+      disc({ evidence: ev({ artifact: "obs/y" }) }),
+      rec({ arm: "A", outcome: "died", at: "R", cites: ["obs/y"] }), // cites but does not move
+    ];
+    expect(derive(portfolio(), stuck, []).discoveries[0]!.learningProgress).toBe(false);
+  });
+
+  test("surprise: true on low-prior + artifact, false on high prior or no prior", () => {
+    expect(derive(portfolio(), [disc({ p_true: 0.1, evidence: ev({ artifact: "obs/x" }) })], []).discoveries[0]!.surprise).toBe(true);
+    expect(derive(portfolio(), [disc({ p_true: 0.8, evidence: ev({ artifact: "obs/x" }) })], []).discoveries[0]!.surprise).toBe(false);
+    expect(derive(portfolio(), [disc({ p_true: null, evidence: ev({ artifact: "obs/x" }) })], []).discoveries[0]!.surprise).toBe(false);
+  });
+
+  test("status promoted-arm when an arm was seeded from this discovery", () => {
+    const log = [disc({ cycle: 3 })];
+    const p = portfolio();
+    p.arms.push({ id: "P", desc: "from disc", priority: "exploratory", target: null, kill: null, created: "2026-06-21T10:00:00Z", from_discovery: 3 });
+    expect(derive(p, log, []).discoveries[0]!.status).toBe("promoted-arm");
+  });
+
+  test("status decayed when old + reuse 0 + low tier; T0 is sticky (parked)", () => {
+    const t2 = [
+      disc({ cycle: 1, evidence: ev({ artifact: "obs/x", tier: "T2" }) }),
+      rec({ cycle: 10, arm: "A", outcome: "died", at: "R" }), // currentCycle 10, age 9 ≥ 8
+    ];
+    expect(derive(portfolio(), t2, []).discoveries[0]!.status).toBe("decayed");
+
+    const t0 = [
+      disc({ cycle: 1, evidence: ev({ artifact: "obs/x", tier: "T0" }) }),
+      rec({ cycle: 10, arm: "A", outcome: "died", at: "R" }),
+    ];
+    expect(derive(portfolio(), t0, []).discoveries[0]!.status).toBe("parked"); // sticky
+
+    const reused = [
+      disc({ cycle: 1, evidence: ev({ artifact: "obs/x", tier: "T2" }) }),
+      rec({ cycle: 10, arm: "A", outcome: "died", at: "R", cites: ["obs/x"] }), // reuse 1 → not decayed
+    ];
+    expect(derive(portfolio(), reused, []).discoveries[0]!.status).toBe("parked");
+  });
+});

@@ -112,6 +112,17 @@ export function cmdArm(dir: string, rest: string[]): number {
       kill: flags.kill ?? null,
       created: new Date(0).toISOString(), // deterministic placeholder; not used by the core
     };
+    // Rung 2 — promote a parked discovery into a new arm (same goal). prd-discovery §4.4.
+    if (flags["from-discovery"] !== undefined) {
+      const cyc = Number(flags["from-discovery"]);
+      const disc = readLog(dir).find((r) => r.outcome === "discovery" && r.cycle === cyc);
+      if (!disc) {
+        err(`no discovery at cycle ${cyc} to promote. Check \`fr board\` / \`fr status\`.`);
+        return 1;
+      }
+      arm.from_discovery = cyc;
+      if (!pos[2]) arm.desc = disc.note; // seed the arm's description from the observation
+    }
     p.arms.push(arm);
   } else {
     if (!arm) {
