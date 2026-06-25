@@ -30,7 +30,7 @@ import {
 } from "./store";
 import { derive } from "./derive";
 import { check } from "./referee";
-import { validateLog, validateDiscover, validateOrient, validateFork } from "./validate";
+import { validateLog, validateDiscover, validateOrient, validateFork, validateGraduate } from "./validate";
 import { renderBoard, promptHook, stopPass, stopBlock, stopSoft } from "./board";
 import { runOracle, currentVerdicts } from "./oracle";
 import { out, err, parseArgs } from "./cliutil";
@@ -442,6 +442,64 @@ export function cmdFork(dir: string, rest: string[], now: string): number {
 /** A filesystem-safe slug of a goal string, for the default fork destination. */
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "fork";
+}
+
+// ── graduate (forward seam: hand a survivor to vibefeld) ────────────────────────
+
+export function cmdGraduate(dir: string, rest: string[], now: string): number {
+  const { pos, flags } = parseArgs(rest);
+  const cycleArg = pos[0];
+  if (!cycleArg) {
+    err('usage: fr graduate <cycle> --to "<vibefeld root ref>"');
+    return 1;
+  }
+  if (!isActive(dir)) {
+    err("no .frontier/ here — run `fr init \"<goal>\"`.");
+    return 1;
+  }
+  const cycle = Number(cycleArg);
+  const log = readLog(dir);
+  const src = log.find((r) => r.cycle === cycle);
+  const ref = flags.to ?? "";
+
+  const result = validateGraduate(src, ref);
+  if (!result.ok) {
+    err(result.error ?? "rejected");
+    return 1;
+  }
+  const s = src!; // defined past the gate
+  const tier = s.evidence?.tier ?? null;
+  const taint = tier === "T0" ? "clean" : "admitted";
+
+  // An INERT forward marker (off-arm, no decision) so the graduation DERIVES without mutating the
+  // log (L2). Like the fork-marker it is breaker-neutral and not a pull. seam-sketch §2.1.
+  const marker: LogRecord = {
+    ts: now,
+    cycle: log.reduce((m, r) => Math.max(m, r.cycle), 0) + 1,
+    arm: null,
+    target: null,
+    outcome: "graduate",
+    at: null,
+    note: `graduated #${cycle} → ${ref}`,
+    evidence: null,
+    workers: [],
+    decision: null,
+    graduates: cycle,
+    graduated_to: ref,
+  };
+  appendLog(dir, marker);
+
+  // Print the GraduationToken the operator seeds vibefeld with (`af init`). fr PREPARES the
+  // hand-off; it does not run vibefeld.
+  out(`graduated #${cycle} ↟ ${ref}`);
+  out(`  statement : ${s.note}`);
+  out(`  provenance: arm ${s.arm ?? "—"} · ${s.evidence?.class ?? "stated"}/${tier ?? "—"} · cycle ${cycle}`);
+  out(
+    taint === "clean"
+      ? "  enter vibefeld as: a clean leaf (T0 proof)"
+      : "  enter vibefeld as: ADMITTED — introduces taint (not a T0 proof; vibefeld must discharge it)",
+  );
+  return 0;
 }
 
 // ── verify (the bank gate's only execution path) ───────────────────────────────

@@ -19,7 +19,15 @@
  * answering the user); it carries `arm: null` + no decision, satisfies G1, and is neutral
  * to every breaker (it is not a pull). PRD §4.2.
  */
-export type Outcome = "banked" | "progress" | "died" | "refuted" | "null" | "discovery" | "orient";
+export type Outcome =
+  | "banked"
+  | "progress"
+  | "died"
+  | "refuted"
+  | "null"
+  | "discovery"
+  | "orient"
+  | "graduate";
 
 export const OUTCOME_GLYPH: Record<Outcome, string> = {
   banked: "▣",
@@ -29,6 +37,7 @@ export const OUTCOME_GLYPH: Record<Outcome, string> = {
   null: "—",
   discovery: "⟡",
   orient: "·",
+  graduate: "↟",
 };
 
 /** Evidence class is an OPEN vocabulary; these are the well-known kinds. */
@@ -98,6 +107,10 @@ export interface LogRecord {
   cites?: string[];
   /** cycle of the discovery this record forked into a new campaign — an inert fork-marker. prd-discovery §4.5. */
   fork_of?: number;
+  /** cycle of the result this record graduated to vibefeld — an inert forward-seam marker. seam-sketch §2.1. */
+  graduates?: number;
+  /** the vibefeld root-obligation ref a result was graduated INTO — set on the graduate marker. seam-sketch §2.1. */
+  graduated_to?: string;
 }
 
 export interface ArmConfig {
@@ -223,6 +236,19 @@ export interface Discovery {
   status: DiscoveryStatus;
 }
 
+/** Forward-seam trust label: a graduated result's initial taint in vibefeld, derived from its fr tier. seam-sketch §3. */
+export type ForwardTaint = "clean" | "admitted";
+
+/** A forward-seam graduation: an fr survivor handed to vibefeld as a root obligation. seam-sketch §2.1. */
+export interface Graduation {
+  cycle: number; // the fr cycle whose result graduated
+  arm: string | null; // the arm that produced it (banked/died name an arm)
+  statement: string; // the proposition handed to vibefeld (the source record's note)
+  vibefeldRef: string; // the graduated_to ref
+  tier: Tier | null; // fr tier of the graduated result
+  initialTaint: ForwardTaint; // clean IFF tier T0 (a proof); else admitted — trust conservation
+}
+
 export interface DerivedState {
   goal: string;
   frontier: string;
@@ -232,6 +258,7 @@ export interface DerivedState {
   banked: BankedResult[];
   discoveries: Discovery[]; // parked off-goal results (prd-discovery §4.2)
   orientTurns: number; // count of no-wave `orient ·` markers (off-arm, not pulls). PRD §4.2.
+  graduations: Graduation[]; // survivors handed to vibefeld (forward seam). seam-sketch §2.1.
   cycle: number; // last cycle index seen (0 if empty)
 }
 

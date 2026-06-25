@@ -21,8 +21,21 @@ frontier-stall breaker is respected. Everything else is light ceremony (`fr log`
 
 ## 1. Current state
 
-- **183 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
-  board ≈26 ms / check ≈25 ms (50 ms budget). **`fr` installed globally** at `~/.local/bin/fr` (on PATH).
+- **198 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
+  board ≈26 ms / check ≈25 ms (50 ms budget — verify on a QUIET machine; under load even pristine `main`
+  measures ~56 ms, so a failing gate mid-session is contention, not a regression). **`fr` installed globally**
+  at `~/.local/bin/fr` (on PATH).
+- **Forward fr⇄vibefeld seam (built this session — `docs/research/seam-sketch.md`, IMPL_PLAN §10).**
+  `vibefeld`/`af` (`../vibefeld`) is the *already-built* contract-carrying adversarial proof DAG (event-sourced
+  ledger, per-node verifier, `gap`/`completeness` challenges, `taint`, lemma-extraction); `fr` is the upstream
+  explore/exploit scouting layer. The eighth outcome **`graduate ↟`** (`fr graduate <cycle> --to "<vibefeld
+  root ref>"`) hands a statable SURVIVOR (a `▣ banked` result or a `✗ died-at` residual) to vibefeld as a root
+  obligation — **off-arm + breaker-neutral**, same shape as `discovery`/`orient` (not a pull, not a turn-ender;
+  `isPull` excludes it; G1 unaffected). Derived `graduations` ledger with **`tier→initialTaint` trust
+  conservation** (`clean` IFF `T0`, else `admitted`), surfaced as `GRADUATED → vibefeld: ×N (clean · admitted)`.
+  This is the FORWARD half ONLY; see §5 for what's deferred. Why the seam (not contracts-on-arms): an `fr` arm
+  is a bet under *unknown* decomposition; vibefeld's nodes are steps of a *chosen* proof — different layers,
+  and the litmus "can you write its verifier?" is a GRADUATION gate between them, not a per-arm admission gate.
 - **No-wave turn marker (built this session, `docs/prd.md` §4.2 + IMPL_PLAN §9).** A seventh outcome
   `orient ·` (`fr orient "<why>"`) gives no-wave turns (a fresh agent *familiarising*, planning, answering
   the user) an **off-arm** channel that **satisfies G1 but is NOT a pull** — fixing the bug where ending an
@@ -120,6 +133,15 @@ nudges the next step. Source: `src/help.ts`.
 
 ## 5. What's NOT done (pick up here)
 
+- **Seam BACKWARD half (the next increment).** The forward graduation marker shipped; the backward
+  `fr ingest <af-dir>` — a vibefeld `gap`/`completeness`/`tainted-leaf`/`refuted` → a fresh `fr` residual / arm /
+  discovery, with `taint→tier` *capping* (a tainted vibefeld lemma can't support a banked `fr` result) — and the
+  **credit-assignment loop** (a *cracked* graduation `supersedes` the arm that banked it; the only sound place
+  for `fr`'s intermediate reward) remain unbuilt. The natural model: `vibefeld` is *an oracle of a richer return
+  type* (a token-set, not a pass/fail bit), i.e. `oracle.ts`'s pattern widened. Spec: `docs/research/seam-sketch.md`
+  §2.2/§4/§6. **Also deferred** (a separate, more invasive step): the statability-tightening of the log gate —
+  every non-null pull names a *falsifiable* post-state, generalizing `died-at`'s G5 discipline (seam-sketch §9).
+  Decided AGAINST: a shared `fr`/`vibefeld` ledger (TJO: too complex for the goal).
 - **Discovery feature — canonical fold-in (on acceptance).** D1–D3 are built/green and documented in
   `docs/prd-discovery.md` (the spec) + `IMPL_PLAN.md` §6–8. On acceptance, fold it into the **canonical
   `docs/prd.md`** (§4 model, §5 data model, §6 CLI, §7 referee, §15) and add one `fr discover` line to the

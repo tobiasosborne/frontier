@@ -74,7 +74,7 @@ export function check(state: DerivedState, turn: TurnState, log: LogRecord[],
 Let `newThisTurn = log.slice(turn.log_len_at_turn_start)` and `newest = log[log.length-1]`. Gates, in order;
 the FIRST failing gate determines the result. If `turn.blocks_this_turn >= p.config.max_blocks_per_turn`,
 return `{status:"soft", ...}` (with the gate/reason) **instead of** `{status:"block"}` (loop guard).
-- **G1 logged-this-turn:** the turn appended no **arm-pull** (`outcome ∉ {discovery, orient}`) **and** no **`orient`** marker → block "No wave outcome logged this turn. Record it with `fr log …` (or `fr orient` if no wave ran)." A turn accounted for by an `orient` alone (no pulls this turn) then **early-returns pass** — the wave gates have nothing to adjudicate, and this stops G4 firing on a legitimate first-turn orient.
+- **G1 logged-this-turn:** the turn appended no **arm-pull** (`outcome ∉ {discovery, orient, graduate}`) **and** no **`orient`** marker → block "No wave outcome logged this turn. Record it with `fr log …` (or `fr orient` if no wave ran)." A turn accounted for by an `orient` alone (no pulls this turn) then **early-returns pass** — the wave gates have nothing to adjudicate, and this stops G4 firing on a legitimate first-turn orient.
 - **G5 died-needs-residual:** any `r∈newThisTurn` with `r.outcome==="died" && !r.at` → block.
 - **G2 progress/banked-backed:** any `r∈newThisTurn` with `r.outcome∈{progress,banked}` and no resolvable
   artifact (`!r.evidence?.artifact`) → block.
@@ -293,3 +293,39 @@ breaker-neutral for free. The only new logic is in `referee.ts` (G1 accepts it) 
 | `validate.test.ts` | `validateOrient` rejects an empty reason; accepts a well-formed marker |
 | `board.test.ts` | renders `NO-WAVE TURNS: ×N` when `orientTurns > 0`; no line when 0 |
 | `integration.test.ts` | `fr orient "x"` appends an off-arm marker and the Stop hook passes; `fr orient` with no reason is rejected; two orient turns add zero pulls (arm stays `??`) and surface `NO-WAVE TURNS: ×2` |
+
+## 10. Seam — forward graduation marker (built)
+
+Spec: `docs/research/seam-sketch.md` §2.1/§3/§5 (the FORWARD half of the fr⇄vibefeld seam — increment 1).
+Scope: hand a statable SURVIVOR to vibefeld as a root obligation. **No** backward `ingest`, **no** shared
+ledger, **no** statability-tightening of the log gate (those are later increments).
+
+**Same off-arm shape as `discovery`/`orient`:** a `graduate ↟` record carries `arm: null`, so it is
+**already excluded** from every arm's `pulls`/`stale`/`strip` (`deriveArm` filters `r.arm === arm.id` —
+breaker-neutral) and is **not a turn-ender** (G1 counts arm-pulls only; `isPull` excludes `graduate`).
+
+**Types (`types.ts`):**
+- `Outcome` gains `"graduate"`; `OUTCOME_GLYPH.graduate = "↟"`.
+- `LogRecord` gains `graduates?: number` (the SOURCE cycle whose result graduated) + `graduated_to?: string`
+  (the vibefeld root ref) — inert forward markers, like `fork_of`.
+- `ForwardTaint = "clean" | "admitted"`; `Graduation { cycle, arm, statement, vibefeldRef, tier, initialTaint }`.
+- `DerivedState` gains `graduations: Graduation[]`.
+
+**Module touches:**
+- **`derive.ts`** — `deriveGraduations(log, isLive)`: newest `graduate` marker per SOURCE cycle wins; joins
+  to the source record for `arm`/`statement`/`tier`; **trust conservation** `initialTaint = tier==="T0" ? "clean" : "admitted"`.
+- **`validate.ts`** — `validateGraduate(src, ref)`: only `banked` or `died`-with-`at` graduates (the litmus
+  as a GRADUATION gate, not a per-arm admission gate); missing cycle / non-survivor / `died` sans `--at` / empty ref reject.
+- **`referee.ts`** — `isPull` excludes `"graduate"` (off-arm, breaker-neutral, not a wave outcome).
+- **`board.ts`** — `GRADUATED → vibefeld: ×N (clean C · admitted A)` tail when `graduations` non-empty.
+- **`commands.ts`/`cli.ts`** — `graduate <cycle> --to "<ref>"`: validate → append the inert marker → print the
+  GraduationToken (statement + provenance + clean/admitted entry). fr PREPARES the hand-off; it does not run vibefeld.
+- **`help.ts`** — `graduate` topic + command-surface entry.
+
+| Test file | Asserts (graduate) |
+|---|---|
+| `derive.test.ts` | a `graduate` marker derives a `Graduation` joined to its source; non-T0 → `admitted`, T0 → `clean` (conservation); breaker-neutral (not in the arm's `pulls`/`strip`); newest marker wins on re-graduation |
+| `validate.test.ts` | `validateGraduate` accepts banked + died-at; rejects a missing cycle, a non-survivor outcome, a `died` without `--at`, an empty `--to` |
+| `referee.test.ts` | a `graduate`-only turn still blocks G1 (not a wave/orient); a `graduate` marker alongside a wave leaves the gates to the pull (passes) |
+| `board.test.ts` | renders `GRADUATED → vibefeld: ×N` with the clean/admitted split; no line when none |
+| `integration.test.ts` | `fr graduate <c> --to <ref>` appends the marker, prints the token (`↟`), surfaces `GRADUATED` on the board; a bad cycle is rejected (exit 1) |

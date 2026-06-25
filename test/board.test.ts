@@ -49,6 +49,7 @@ function state(over: Partial<DerivedState> = {}): DerivedState {
     banked: [],
     discoveries: [],
     orientTurns: 0,
+    graduations: [],
     cycle: 6,
     ...over,
   };
@@ -304,6 +305,27 @@ describe("renderBoard factual phrasing (no imperatives)", () => {
       state({ arms: [arm({ stale: 5, status: "stalled", distinctFamilies: 3 })] }),
     );
     expect(out).not.toMatch(/\b(must|should|switch now|you need to)\b/i);
+  });
+});
+
+// ── GRADUATED (forward seam → vibefeld) tail ─────────────────────────────────
+describe("graduated tail", () => {
+  test("renders a GRADUATED count with the clean/admitted split", () => {
+    const out = renderBoard(
+      state({
+        graduations: [
+          { cycle: 1, arm: "A", statement: "lem-x", vibefeldRef: "af:r1", tier: "T0", initialTaint: "clean" },
+          { cycle: 2, arm: "A", statement: "resid", vibefeldRef: "af:r2", tier: null, initialTaint: "admitted" },
+        ],
+      }),
+    );
+    expect(out).toContain("GRADUATED → vibefeld: ×2");
+    expect(out).toContain("clean 1");
+    expect(out).toContain("admitted 1");
+  });
+
+  test("no GRADUATED line when there are none", () => {
+    expect(renderBoard(state({ graduations: [] }))).not.toContain("GRADUATED");
   });
 });
 

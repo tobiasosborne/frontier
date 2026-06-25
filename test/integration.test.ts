@@ -431,3 +431,23 @@ describe("D3 fork", () => {
     expect(board).not.toContain("a load-bearing lemma");
   });
 });
+
+// ── forward seam: fr graduate hands a survivor to vibefeld ────────────────────
+describe("forward seam: fr graduate", () => {
+  test("graduates a died-at residual, surfaces it on the board, rejects a bad cycle", () => {
+    init();
+    beginTurn();
+    fr("log", "A", "died", "reduces to witness positivity", "--at", "witness positivity remains", "--decide", "EXPLORE", "B");
+    const g = fr("graduate", "1", "--to", "af:root-1");
+    expect(g.code).toBe(0);
+    expect(g.stdout).toContain("graduated #1");
+    expect(g.stdout).toContain("↟");
+
+    const board = fr("board").stdout;
+    expect(board).toContain("GRADUATED → vibefeld: ×1");
+    expect(board).toContain("admitted 1"); // a died-at residual is non-T0 → admitted
+
+    const bad = fr("graduate", "99", "--to", "af:x");
+    expect(bad.code).toBe(1);
+  });
+});

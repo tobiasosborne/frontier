@@ -19,6 +19,7 @@ import {
   type DeadRoute,
   type BankedResult,
   type Discovery,
+  type Graduation,
   type ArmStatus,
   type Tier,
   type EvidenceClass,
@@ -131,7 +132,11 @@ export function derive(
   //    so the board can surface them factually (PRD §4.2). They are NOT pulls.
   const orientTurns = log.reduce((n, r) => (r.outcome === "orient" && isLive(r) ? n + 1 : n), 0);
 
-  return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, discoveries, orientTurns, cycle };
+  // ── graduations: live `graduate ↟` markers (forward seam → vibefeld). Off-arm by
+  //    construction (arm:null), so excluded from every arm/breaker above. seam-sketch §2.1.
+  const graduations = deriveGraduations(log, isLive);
+
+  return { goal: p.goal, frontier, frontierTrail, arms, deadRoutes, banked, discoveries, orientTurns, graduations, cycle };
 }
 
 // ── discoveries ledger ───────────────────────────────────────────────────────
@@ -203,6 +208,32 @@ function deriveDiscoveries(
     });
   }
   return out;
+}
+
+// ── graduations (forward seam → vibefeld) ──────────────────────────────────────
+
+function deriveGraduations(log: LogRecord[], isLive: (r: LogRecord) => boolean): Graduation[] {
+  const byCycle = new Map<number, LogRecord>();
+  for (const r of log) byCycle.set(r.cycle, r);
+
+  // newest marker per SOURCE cycle wins (a re-graduation supersedes an earlier ref).
+  const byGraduated = new Map<number, Graduation>();
+  for (const m of log) {
+    if (!isLive(m) || m.outcome !== "graduate") continue;
+    if (m.graduates == null || m.graduated_to == null) continue;
+    const src = byCycle.get(m.graduates);
+    const tier = src?.evidence?.tier ?? null;
+    byGraduated.set(m.graduates, {
+      cycle: m.graduates,
+      arm: src?.arm ?? null,
+      statement: src?.note ?? m.note,
+      vibefeldRef: m.graduated_to,
+      tier,
+      // trust conservation: only a T0 proof enters vibefeld clean; anything weaker is admitted.
+      initialTaint: tier === "T0" ? "clean" : "admitted",
+    });
+  }
+  return [...byGraduated.values()];
 }
 
 // ── per-arm derivation ─────────────────────────────────────────────────────────

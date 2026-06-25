@@ -67,6 +67,7 @@ function state(arms: DerivedArm[], over: Partial<DerivedState> = {}): DerivedSta
     banked: [],
     discoveries: [],
     orientTurns: 0,
+    graduations: [],
     cycle: arms.length,
     ...over,
   };
@@ -367,6 +368,23 @@ describe("loop guard", () => {
   test("a pass is never affected by the guard", () => {
     const r = rec({ outcome: "died", at: "residual-1", decision: decision("EXPLOIT", "A") });
     const res = check(state([arm()]), turn({ blocks_this_turn: 9 }), [r], portfolio(), []);
+    expect(res.status).toBe("pass");
+  });
+});
+
+// ── graduate marker (forward seam): off-arm, not a turn-ender ─────────────────
+describe("graduate marker is off-arm / breaker-neutral", () => {
+  test("a graduate-only turn still BLOCKS at G1 (not a wave, not an orient)", () => {
+    const g = rec({ cycle: 1, arm: null, outcome: "graduate", at: null, decision: null, graduates: 0, graduated_to: "af:root" });
+    const res = check(state([arm()]), turn({ log_len_at_turn_start: 0 }), [g], portfolio(), []);
+    expect(res.status).toBe("block");
+    expect(res.gate).toBe("G1");
+  });
+
+  test("a graduate marker alongside a wave leaves the wave gates to the pull (passes)", () => {
+    const p = rec({ cycle: 1, arm: "A", outcome: "died", at: "r1", decision: decision("EXPLOIT", "A") });
+    const g = rec({ cycle: 2, arm: null, outcome: "graduate", at: null, decision: null, graduates: 1, graduated_to: "af:root" });
+    const res = check(state([arm()]), turn({ log_len_at_turn_start: 0 }), [p, g], portfolio(), []);
     expect(res.status).toBe("pass");
   });
 });

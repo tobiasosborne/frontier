@@ -76,6 +76,15 @@ export function renderBoard(state: DerivedState, opts: BoardOpts = {}): string {
     lines.push(`DISCOVERIES (off-goal, parked): ${shown}`);
   }
 
+  // ── GRADUATED tail (forward seam → vibefeld) ─────────────────────────────
+  // Factual count of survivors handed to the proof layer, split by trust (clean iff T0 → a clean
+  // vibefeld leaf; else admitted → introduces taint). seam-sketch §2.1/§3.
+  if (state.graduations.length > 0) {
+    const clean = state.graduations.filter((g) => g.initialTaint === "clean").length;
+    const admitted = state.graduations.length - clean;
+    lines.push(`GRADUATED → vibefeld: ×${state.graduations.length} (clean ${clean} · admitted ${admitted})`);
+  }
+
   // ── NO-WAVE TURNS tail (orient ·) ────────────────────────────────────────
   // Factual count of no-wave turns (orientation / planning). Surfaced so the no-wave
   // escape stays VISIBLE rather than hidden — it is not a pull and never trips a breaker.

@@ -23,7 +23,7 @@ THE PER-TURN RITUAL (this is the whole protocol):
   No wave this turn (orientation / planning / answering)? Record it with \`fr orient "<why>"\`
   instead of a junk null — off-arm, not a pull, and it never trips the breaker.
 
-COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  orient  fork  verify  board  check  turn-begin  status  help
+COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  orient  fork  graduate  verify  board  check  turn-begin  status  help
 CONCEPTS  (\`fr help <topic>\`): workflow  outcomes  breaker  bank-gate  evidence  arms  frontier  discovery  oracles  hooks
 
 The board (injected each turn) is your live FRONTIER + portfolio scoreboard + dead routes.`;
@@ -82,6 +82,15 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   (oracles/thresholds), seeds goal+frontier (+optional first arm), stamps forked_from provenance,
   and inherits cited artifacts BY REFERENCE (the child re-banks via its own oracle). fr PREPARES
   the fork; it does not launch it — open a new session rooted at <dest>.  (\`fr help discovery\`)`,
+
+  graduate: `fr graduate <cycle> --to "<vibefeld root ref>"
+  FORWARD SEAM — hand a SURVIVOR to vibefeld (the adversarial proof layer) as a root obligation.
+  Only a ▣ banked result or a ✗ died-at residual graduates (a statable survivor, not a vibe) — the
+  litmus as a GRADUATION gate, not a per-arm admission gate. Off-arm and breaker-NEUTRAL: it is NOT
+  a pull and does not end a turn (like a discovery). Records an inert marker (genealogy survives in
+  the log) and prints the GraduationToken to seed vibefeld with — a T0 result enters as a clean
+  leaf; anything weaker enters ADMITTED (introduces taint; vibefeld must discharge it). fr PREPARES
+  the hand-off; it does not run vibefeld.  (docs/research/seam-sketch.md)`,
 
   verify: `fr verify <claim> --oracle <name>
   Run a registered oracle (argv, NO shell; claim text on stdin) → a PASS/FAIL verdict, the

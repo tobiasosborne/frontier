@@ -8,7 +8,7 @@
  *   not an escape — plus a happy-path {ok:true}.
  */
 import { test, expect, describe } from "bun:test";
-import { validateLog, validateDiscover, validateOrient, validateFork } from "../src/validate";
+import { validateLog, validateDiscover, validateOrient, validateFork, validateGraduate } from "../src/validate";
 import type {
   Portfolio,
   DerivedState,
@@ -65,6 +65,7 @@ function state(arms: DerivedArm[], over: Partial<DerivedState> = {}): DerivedSta
     banked: [],
     discoveries: [],
     orientTurns: 0,
+    graduations: [],
     cycle: arms.length,
     ...over,
   };
@@ -391,5 +392,45 @@ describe("breaker-tripped", () => {
       [],
     );
     expect(res.ok).toBe(true);
+  });
+});
+
+// ── validateGraduate (forward-seam graduation gate) ──────────────────────────
+describe("validateGraduate", () => {
+  const src = (over: Partial<LogRecord> = {}): LogRecord => ({
+    ts: "t",
+    cycle: 1,
+    arm: "A",
+    target: null,
+    outcome: "banked" as Outcome,
+    at: null,
+    note: "lem-x",
+    evidence: { class: "lean", tier: "T0", artifact: "proofs/x", verdict: "banked" },
+    workers: [],
+    p_true: null,
+    p_audit: null,
+    decision: { type: "EXPLOIT", arm: "A" },
+    ...over,
+  });
+
+  test("accepts a banked survivor with a ref", () => {
+    expect(validateGraduate(src(), "af:root").ok).toBe(true);
+  });
+  test("accepts a died-at residual with a ref", () => {
+    expect(validateGraduate(src({ outcome: "died", at: "witness positivity", evidence: null }), "af:root").ok).toBe(true);
+  });
+  test("rejects a missing cycle (no such result)", () => {
+    expect(validateGraduate(undefined, "af:root").ok).toBe(false);
+  });
+  test("rejects a non-survivor outcome (only banked / died-at graduate)", () => {
+    expect(validateGraduate(src({ outcome: "progress", evidence: { class: "num", tier: "T2", artifact: "n", verdict: "claimed" } }), "af:root").ok).toBe(false);
+    expect(validateGraduate(src({ outcome: "null", evidence: null }), "af:root").ok).toBe(false);
+    expect(validateGraduate(src({ outcome: "refuted", evidence: null }), "af:root").ok).toBe(false);
+  });
+  test("rejects a died WITHOUT a residual (nothing statable to graduate)", () => {
+    expect(validateGraduate(src({ outcome: "died", at: null, evidence: null }), "af:root").ok).toBe(false);
+  });
+  test("rejects a missing --to ref", () => {
+    expect(validateGraduate(src(), "  ").ok).toBe(false);
   });
 });

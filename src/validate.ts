@@ -95,6 +95,33 @@ export function validateFork(
   return { ok: true };
 }
 
+/**
+ * Forward-seam graduation gate (seam-sketch §2.1). Only a statable SURVIVOR graduates to vibefeld:
+ * a ▣ banked result (already verified at write) or a ✗ died-at residual (a sharply-stated open).
+ * A vibe — null/progress/refuted, or a died without --at — has nothing statable to hand the proof
+ * layer. The litmus as a GRADUATION gate (when is a survivor ready to leave fr?), not a per-arm
+ * admission gate. PURE.
+ */
+export function validateGraduate(src: LogRecord | undefined, ref: string): ValidationResult {
+  if (!src) {
+    return reject("No such cycle to graduate. Check `fr board` / `fr status`.");
+  }
+  if (src.outcome !== "banked" && src.outcome !== "died") {
+    return reject(
+      `Only a ▣ banked result or a ✗ died-at residual graduates — cycle ${src.cycle} is '${src.outcome}' (a statable survivor, not a vibe).`,
+    );
+  }
+  if (src.outcome === "died" && !src.at) {
+    return reject(
+      `Cycle ${src.cycle} died without a stated residual — nothing statable to graduate. (a ✗ needs --at)`,
+    );
+  }
+  if (!ref || !ref.trim()) {
+    return reject('A graduation needs a target: fr graduate <cycle> --to "<vibefeld root ref>".');
+  }
+  return { ok: true };
+}
+
 export function validateLog(
   p: Portfolio,
   state: DerivedState,

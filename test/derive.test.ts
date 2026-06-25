@@ -509,3 +509,58 @@ describe("discovery signals (D2)", () => {
     expect(ds[0]!.status).toBe("forked");
   });
 });
+
+// ── graduations (forward seam → vibefeld) ────────────────────────────────────
+describe("graduations (forward seam)", () => {
+  test("a graduate marker derives a Graduation joined to its source result", () => {
+    cycleCounter = 0;
+    const log: LogRecord[] = [
+      rec({ cycle: 1, arm: "A", outcome: "banked", note: "lem-x: W3 is 2-undistillable", evidence: ev({ tier: "T0", class: "lean", artifact: "proofs/lem-x" }) }),
+      rec({ cycle: 2, arm: null, outcome: "graduate", at: null, note: "g", decision: null, evidence: null, graduates: 1, graduated_to: "af:root" }),
+    ];
+    const g = derive(portfolio(), log, []).graduations;
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({
+      cycle: 1,
+      arm: "A",
+      statement: "lem-x: W3 is 2-undistillable",
+      vibefeldRef: "af:root",
+      tier: "T0",
+      initialTaint: "clean",
+    });
+  });
+
+  test("trust conservation: a non-T0 survivor enters vibefeld ADMITTED (clean iff T0)", () => {
+    cycleCounter = 0;
+    const log: LogRecord[] = [
+      rec({ cycle: 1, arm: "A", outcome: "died", at: "witness positivity remains", note: "reduces to: witness positivity", evidence: null }),
+      rec({ cycle: 2, arm: null, outcome: "graduate", at: null, note: "g", decision: null, evidence: null, graduates: 1, graduated_to: "af:root2" }),
+    ];
+    const g = derive(portfolio(), log, []).graduations;
+    expect(g[0]!.initialTaint).toBe("admitted");
+    expect(g[0]!.tier).toBeNull();
+  });
+
+  test("a graduate marker is breaker-NEUTRAL: not counted in the arm's pulls or strip", () => {
+    cycleCounter = 0;
+    const log: LogRecord[] = [
+      rec({ cycle: 1, arm: "A", outcome: "banked", note: "x", evidence: ev({ tier: "T0", artifact: "proofs/x" }) }),
+      rec({ cycle: 2, arm: null, outcome: "graduate", at: null, note: "g", decision: null, evidence: null, graduates: 1, graduated_to: "af:root" }),
+    ];
+    const A = armOf(derive(portfolio(), log, []), "A");
+    expect(A.pulls).toBe(1);
+    expect(A.strip).toBe("▣");
+  });
+
+  test("newest marker wins on re-graduation of the same source cycle", () => {
+    cycleCounter = 0;
+    const log: LogRecord[] = [
+      rec({ cycle: 1, arm: "A", outcome: "banked", note: "x", evidence: ev({ tier: "T0", artifact: "proofs/x" }) }),
+      rec({ cycle: 2, arm: null, outcome: "graduate", at: null, note: "g1", decision: null, evidence: null, graduates: 1, graduated_to: "af:OLD" }),
+      rec({ cycle: 3, arm: null, outcome: "graduate", at: null, note: "g2", decision: null, evidence: null, graduates: 1, graduated_to: "af:NEW" }),
+    ];
+    const g = derive(portfolio(), log, []).graduations;
+    expect(g).toHaveLength(1);
+    expect(g[0]!.vibefeldRef).toBe("af:NEW");
+  });
+});
