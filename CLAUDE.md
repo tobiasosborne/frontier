@@ -30,10 +30,11 @@ gate the model can quietly satisfy without doing the work.** Everything below ex
   cold-start **< 50 ms**: two small file reads, compute, print — no network, no heavy import, no dynamic
   require. **Fail closed:** if `.frontier/` is active but the referee cannot run, `check` **BLOCKS** the stop.
   Inert (`{}`, exit 0) when `.frontier/portfolio.json` is absent.
-- **L4 — The core is pure and deterministic.** `derive.ts`, `referee.ts`, `validate.ts`, `board.ts` are
-  LLM-free, side-effect-free pure functions of their inputs — **no FS, clock, env, or network inside them**
-  (inject `now`/paths from the edge). Only `store.ts`, `oracle.ts`, `cli.ts`, `index.ts` touch the outside
-  world. Purity is what makes the referee unit-testable and the latency budget reachable.
+- **L4 — The core is pure and deterministic.** `derive.ts`, `referee.ts`, `validate.ts`, `board.ts`,
+  `ingest.ts` are LLM-free, side-effect-free pure functions of their inputs — **no FS, clock, env, or network
+  inside them** (inject `now`/paths from the edge). Only `store.ts`, `oracle.ts`, `vibefeld.ts`, `cli.ts`,
+  `index.ts` touch the outside world. Purity is what makes the referee unit-testable and the latency budget
+  reachable.
 
 ## Anti-gaming principle (why the gates exist)
 
@@ -83,7 +84,9 @@ src/derive.ts    PURE: (Portfolio, LogRecord[], Verdict[]) → DerivedState
 src/referee.ts   PURE: (DerivedState, TurnState, ...) → CheckResult — gates G1–G5, breaker, anti-launder, guard
 src/validate.ts  PURE: write-time validation for `fr log` (immediate rejects)
 src/board.ts     PURE: DerivedState → factual board text + hook JSON wrappers
+src/ingest.ts    PURE: VibefeldState → ResidualToken[] — backward-seam classifier + taint→cap conservation
 src/oracle.ts    verify edge: run a registered command oracle → scrubbed hash-bound verdict (impure)
+src/vibefeld.ts  ingest edge: run `af status/challenges --format json` → VibefeldState (impure; pure parser inside)
 src/cli.ts       arg parse + command dispatch (impure edge) · src/index.ts entrypoint
 test/*.test.ts   bun tests — one per module + integration · scripts/latency.ts latency harness
 ```

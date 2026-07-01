@@ -329,3 +329,49 @@ breaker-neutral) and is **not a turn-ender** (G1 counts arm-pulls only; `isPull`
 | `referee.test.ts` | a `graduate`-only turn still blocks G1 (not a wave/orient); a `graduate` marker alongside a wave leaves the gates to the pull (passes) |
 | `board.test.ts` | renders `GRADUATED → vibefeld: ×N` with the clean/admitted split; no line when none |
 | `integration.test.ts` | `fr graduate <c> --to <ref>` appends the marker, prints the token (`↟`), surfaces `GRADUATED` on the board; a bad cycle is rejected (exit 1) |
+
+## 11. Seam — backward `ingest` parser (increment 1, read-only, BUILT)
+
+Spec: `docs/research/seam-sketch.md` §2.2/§3/§6 (the BACKWARD half of the fr⇄vibefeld seam). Scope this
+increment: **REPORT** the fr obligations a vibefeld workspace would reopen — the READER, not the WRITER.
+**No** record writes, **no** hash-bound re-ingest idempotency, **no** `crack→supersedes` credit-assignment
+loop (those are the next increment). Same "prepares, does not launch" posture as `fork` / `graduate`.
+
+**vibefeld as an oracle of a richer return type** (seam-sketch §0): `fr ingest` runs `af status/challenges
+--format json` and scrubs the derived state into `ResidualToken`s — the structured sibling of `fr verify`'s
+scalar `Verdict`. The pure core never imports `af`.
+
+**The map (pure, `ingest.ts`), MONOTONE and NEVER-UPGRADING (anti-gaming §8):**
+
+| vibefeld condition | `ResidualKind` | `lands` | `cap` (trust ceiling) |
+|---|---|---|---|
+| a `refuted` node | `refutation` | `refuted` dead-route (sharpens the frontier by elimination) | `null` |
+| an OPEN `critical`/`major` challenge on a node | `gap` | new arm (`--target`) | `null` (a fresh open, banks nothing) |
+| an `admitted`/`tainted` LEAF | `taint` | discovery (a `--cites`-able lemma) | **`T2`** — can NEVER support banked/T0 |
+
+Precedence per node: `refuted` (terminal-false) > open blocking challenges (one `gap` each) > tainted-leaf.
+Only LEAVES cross back as `taint` (a tainted interior node is skipped — the citable unit is a leaf lemma).
+An admitted node is caught by `epistemic === "admitted"` even when its per-node `taint_state` reads
+`unresolved` (a pending ancestor) — relying on `taint_state` alone would miss it.
+
+**Types (`types.ts`):** `VibefeldEpistemic` · `VibefeldTaint` · `ChallengeSeverity` · `VibefeldNode`
+(`isLeaf` derived from the id tree) · `VibefeldChallenge` · `VibefeldState` · `ResidualKind`
+(`gap|taint|refutation`; `crack` deferred) · `ResidualLanding` · `ResidualToken { kind, statement, lands,
+provenance{afDir,nodeId,challengeId,contentHash}, cap: Tier|null }`.
+
+**Module touches:**
+- **`ingest.ts`** (NEW, PURE) — `ingestResiduals(state) → ResidualToken[]`: the classifier + `taint→cap`
+  conservation. No fs/clock/env.
+- **`vibefeld.ts`** (NEW, IMPURE edge) — `readVibefeldState(afDir)` spawns `af` (binary via `$FR_AF_BIN`,
+  default `af`); pure `parseVibefeldState(statusJSON, challengesJSON, afDir)` maps the JSON → `VibefeldState`
+  (degrades to empty on garbage, never throws). A broken/absent `af` is reported, never swallowed (an empty
+  report must mean "clean proof", not "af failed").
+- **`commands.ts`/`cli.ts`** — `ingest <af-dir>`: read → classify → print the report + a "no records written"
+  note. Requires an active `.frontier/`; missing af-dir or a failing `af` → exit 1.
+- **`help.ts`** — `ingest` topic + command-surface entry.
+
+| Test file | Asserts (ingest) |
+|---|---|
+| `ingest.test.ts` | refuted→refutation(null); open crit/major→gap(null), minor/resolved→none; admitted/tainted LEAF→taint(**T2**), interior→none, clean/unresolved→none; refuted precedence; the never-upgrade invariant (every `cap ∈ {T2,null}`, never T0); determinism |
+| `vibefeld.test.ts` | `parseVibefeldState` maps af field names + derives `isLeaf` from the id tree; a healthy proof → 0 residuals, a sick proof → gap+refutation+taint; empty JSON degrades, never throws |
+| `integration.test.ts` | `fr ingest <af-dir>` (fake `af` via `$FR_AF_BIN`) reports the 3 kinds + `[cap T2]` + "no records written" and writes NO log; a healthy proof → 0 residuals; missing arg → exit 1; a failing/absent `af` → exit 1 |

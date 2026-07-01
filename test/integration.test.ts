@@ -451,3 +451,73 @@ describe("forward seam: fr graduate", () => {
     expect(bad.code).toBe(1);
   });
 });
+
+// ── backward seam: fr ingest REPORTS what vibefeld would reopen (read-only) ────
+describe("backward seam: fr ingest (read-only parser)", () => {
+  /** Write a fake `af` on FR_AF_BIN that answers status/challenges with canned JSON. */
+  function fakeAf(statusJSON: string, challengesJSON: string): string {
+    const bin = path.join(projDir, "fake-af");
+    // A leaf refuted node (1.2), an open-critical-challenged node (1.1), an admitted leaf (1.3).
+    fs.writeFileSync(
+      bin,
+      `#!/usr/bin/env bash\nif [ "$1" = "status" ]; then cat <<'EOF'\n${statusJSON}\nEOF\nelif [ "$1" = "challenges" ]; then cat <<'EOF'\n${challengesJSON}\nEOF\nfi\n`,
+    );
+    fs.chmodSync(bin, 0o755);
+    return bin;
+  }
+  function frWithAf(bin: string, ...args: string[]): RunResult {
+    const proc = Bun.spawnSync(["bun", "run", SRC, ...args], {
+      cwd: projDir,
+      env: { ...process.env, CLAUDE_PROJECT_DIR: projDir, FR_AF_BIN: bin },
+    });
+    return { code: proc.exitCode, stdout: proc.stdout.toString(), stderr: proc.stderr.toString() };
+  }
+
+  const SICK_STATUS = JSON.stringify({
+    nodes: [
+      { id: "1", statement: "root", epistemic_state: "pending", taint_state: "unresolved", content_hash: "r" },
+      { id: "1.1", statement: "needs counting argument", epistemic_state: "pending", taint_state: "unresolved", content_hash: "a" },
+      { id: "1.2", statement: "false lemma", epistemic_state: "refuted", taint_state: "clean", content_hash: "b" },
+      { id: "1.3", statement: "admitted on faith", epistemic_state: "admitted", taint_state: "self_admitted", content_hash: "c" },
+    ],
+  });
+  const SICK_CHALLENGES = JSON.stringify({
+    challenges: [{ id: "ch-1", node_id: "1.1", status: "open", severity: "critical", reason: "not a definition" }],
+  });
+
+  test("reports the gap/refutation/taint obligations WITHOUT writing any log records", () => {
+    init();
+    const bin = fakeAf(SICK_STATUS, SICK_CHALLENGES);
+    const r = frWithAf(bin, "ingest", "/some/af/dir");
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("refutation");
+    expect(r.stdout).toContain("gap");
+    expect(r.stdout).toContain("taint");
+    expect(r.stdout).toContain("T2"); // trust conservation surfaced for the taint residual
+    expect(r.stdout.toLowerCase()).toContain("no records written"); // read-only posture
+
+    // read-only: no log.jsonl was created by ingest.
+    expect(fs.existsSync(path.join(frontierDir, "log.jsonl"))).toBe(false);
+  });
+
+  test("a healthy proof reports zero obligations", () => {
+    init();
+    const bin = fakeAf(JSON.stringify({ nodes: [{ id: "1", statement: "root", epistemic_state: "validated", taint_state: "clean", content_hash: "h" }] }), JSON.stringify({ challenges: [] }));
+    const r = frWithAf(bin, "ingest", "/some/af/dir");
+    expect(r.code).toBe(0);
+    expect(r.stdout).toMatch(/0 residual|no residual|nothing to ingest/i);
+  });
+
+  test("missing af-dir arg is rejected (exit 1)", () => {
+    init();
+    const r = fr("ingest");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("usage");
+  });
+
+  test("a failing/absent af binary is reported, not swallowed (exit 1)", () => {
+    init();
+    const r = frWithAf("/nonexistent/af", "ingest", "/some/af/dir");
+    expect(r.code).toBe(1);
+  });
+});

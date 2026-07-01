@@ -249,6 +249,72 @@ export interface Graduation {
   initialTaint: ForwardTaint; // clean IFF tier T0 (a proof); else admitted — trust conservation
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Backward seam (vibefeld → fr): the structured "richer return type" fr reads,
+// and the reopened obligations it maps to. seam-sketch §2.2/§3/§6.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** A vibefeld node's epistemic state (`af status --format json`). concepts.md §states. */
+export type VibefeldEpistemic = "pending" | "validated" | "admitted" | "refuted" | "archived";
+
+/** A vibefeld node's taint state — how much unearned trust it carries. concepts.md §taint. */
+export type VibefeldTaint = "clean" | "self_admitted" | "tainted" | "unresolved";
+
+/** Challenge severity; `critical`/`major` BLOCK acceptance, `minor`/`note` are advisory. */
+export type ChallengeSeverity = "critical" | "major" | "minor" | "note" | (string & {});
+
+/** One vibefeld proof node, scrubbed to what the seam needs. seam-sketch §6. */
+export interface VibefeldNode {
+  id: string; // hierarchical, e.g. "1.1.2"
+  statement: string;
+  epistemic: VibefeldEpistemic;
+  taint: VibefeldTaint;
+  contentHash: string;
+  /** A LEAF has no descendant node (no other id begins `${id}.`). A taint residual is a leaf. */
+  isLeaf: boolean;
+}
+
+/** One vibefeld challenge against a node. seam-sketch §2.2. */
+export interface VibefeldChallenge {
+  id: string;
+  nodeId: string;
+  status: "open" | "resolved" | "withdrawn" | (string & {});
+  severity: ChallengeSeverity;
+  reason: string;
+}
+
+/** The structured verdict fr reads from a vibefeld workspace (an oracle of a richer return type). */
+export interface VibefeldState {
+  afDir: string;
+  nodes: VibefeldNode[];
+  challenges: VibefeldChallenge[];
+}
+
+/**
+ * A reopened obligation crossing BACK from vibefeld into fr (seam-sketch §2.2). Each is
+ * type-identical to an fr `died-at` residual — an obligation newly sharpened, not discharged.
+ * `crack` (a critical gap in a node fr had BANKED → supersession) is deferred to the write
+ * increment: it needs the cross-ledger join to fr's banked ledger (the credit-assignment loop).
+ */
+export type ResidualKind = "gap" | "taint" | "refutation";
+
+/** What fr obligation a residual would become when the write path lands. */
+export type ResidualLanding = "arm" | "discovery" | "refuted";
+
+export interface ResidualToken {
+  kind: ResidualKind;
+  statement: string; // the gap / admitted lemma / dead approach
+  lands: ResidualLanding;
+  provenance: { afDir: string; nodeId: string; challengeId: string | null; contentHash: string };
+  /**
+   * Trust conservation (seam-sketch §3): the CEILING tier fr may grant anything citing this.
+   * `T2` for a tainted/admitted lemma (can NEVER support a banked/T0 fr result); `null` for a
+   * `gap` (a fresh open, banks nothing) or a `refutation` (a dead-route). NEVER T0 — that would
+   * be the trust-upgrade hole the whole anti-gaming spine exists to prevent (§8).
+   */
+  cap: Tier | null;
+}
+
 export interface DerivedState {
   goal: string;
   frontier: string;

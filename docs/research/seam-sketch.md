@@ -1,12 +1,17 @@
 # The fr ⇄ vibefeld seam — an exploratory design sketch
 
-> **Status: EXPLORATION → increment 1 BUILT.** This began as a pre-canonical thinking artifact
+> **Status: EXPLORATION → increments 1–2 BUILT.** This began as a pre-canonical thinking artifact
 > (`docs/research/`, parallel to `discovery-ledger-lit-review.md`); the canonical design remains
-> `docs/prd.md`. **The forward graduation marker (§2.1, §5, §9 — increment 1) is now implemented and
-> green:** `fr graduate <cycle> --to <ref>`, the off-arm breaker-neutral `graduate ↟` outcome, the
-> derived `graduations` view + `tier→initialTaint` conservation, and the `GRADUATED → vibefeld`
-> board line. **Still exploratory / unbuilt:** the backward `ingest` machinery (§2.2, §4 — the
-> credit-assignment loop) and the statability-tightening of the log gate (§9 deferral).
+> `docs/prd.md`. **Forward increment 1 (§2.1, §5, §9) is implemented and green:** `fr graduate <cycle>
+> --to <ref>`, the off-arm breaker-neutral `graduate ↟` outcome, the derived `graduations` view +
+> `tier→initialTaint` conservation, and the `GRADUATED → vibefeld` board line. **Backward increment 1
+> (§2.2/§3/§6 — the READ-ONLY parser) is now also built and green** (IMPL_PLAN §11): `fr ingest
+> <af-dir>` runs `af` as a structured oracle, maps its derived state → `ResidualToken`s (a `refuted`
+> node → `refutation`; an open critical/major challenge → `gap`; an admitted/tainted leaf → `taint`
+> capped at T2 — the never-upgrade `taint→cap` conservation), and REPORTS them; it writes no records
+> yet. **Still exploratory / unbuilt:** the ingest WRITE path (append the tokens as arms/discoveries/
+> refuted records, hash-bound for idempotent re-ingest — the `currentVerdicts` twin), the `crack →
+> supersedes` credit-assignment loop (§2.2/§4), and the statability-tightening of the log gate (§9).
 
 ## 0. The one-line architecture
 

@@ -33,6 +33,8 @@ import { check } from "./referee";
 import { validateLog, validateDiscover, validateOrient, validateFork, validateGraduate } from "./validate";
 import { renderBoard, promptHook, stopPass, stopBlock, stopSoft } from "./board";
 import { runOracle, currentVerdicts } from "./oracle";
+import { readVibefeldState } from "./vibefeld";
+import { ingestResiduals } from "./ingest";
 import { out, err, parseArgs } from "./cliutil";
 import type {
   Portfolio,
@@ -498,6 +500,55 @@ export function cmdGraduate(dir: string, rest: string[], now: string): number {
     taint === "clean"
       ? "  enter vibefeld as: a clean leaf (T0 proof)"
       : "  enter vibefeld as: ADMITTED — introduces taint (not a T0 proof; vibefeld must discharge it)",
+  );
+  return 0;
+}
+
+// ── ingest (backward seam: REPORT what vibefeld would reopen in fr) ─────────────
+
+/** Human labels for what fr obligation each residual kind would become. */
+const LANDS_LABEL: Record<string, string> = {
+  arm: "new arm",
+  discovery: "discovery",
+  refuted: "refuted dead-route",
+};
+
+export function cmdIngest(dir: string, rest: string[]): number {
+  const { pos } = parseArgs(rest);
+  const afDir = pos[0];
+  if (!afDir) {
+    err("usage: fr ingest <af-dir>   (reports the obligations a vibefeld workspace would reopen in fr)");
+    return 1;
+  }
+  if (!isActive(dir)) {
+    err("no .frontier/ here — run `fr init \"<goal>\"`.");
+    return 1;
+  }
+
+  // EDGE: run `af` and parse its derived state. A broken/absent af is reported, never swallowed
+  // (an empty report must mean "clean proof", not "af failed"). seam-sketch §8.
+  let residuals;
+  try {
+    residuals = ingestResiduals(readVibefeldState(afDir));
+  } catch (e) {
+    err(`ingest failed: ${e instanceof Error ? e.message : String(e)}`);
+    return 1;
+  }
+
+  if (residuals.length === 0) {
+    out(`ingest ${afDir} — 0 residuals: nothing to ingest (the proof is clean / validated).`);
+    return 0;
+  }
+
+  out(`ingest ${afDir} — ${residuals.length} residual(s) vibefeld would reopen in fr (read-only; no records written):`);
+  for (const t of residuals) {
+    const lands = LANDS_LABEL[t.lands] ?? t.lands;
+    const cap = t.cap ? `  [cap ${t.cap}]` : "";
+    out(`  ${t.kind.padEnd(11)}→ ${lands}${cap}   node ${t.provenance.nodeId}   ${t.statement}`);
+  }
+  out(
+    "next: the WRITE path (append these as arms / discoveries / refuted records, hash-bound for " +
+      "idempotent re-ingest) + the crack→supersedes credit-assignment loop land in the next increment.",
   );
   return 0;
 }

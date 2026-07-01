@@ -23,7 +23,7 @@ THE PER-TURN RITUAL (this is the whole protocol):
   No wave this turn (orientation / planning / answering)? Record it with \`fr orient "<why>"\`
   instead of a junk null — off-arm, not a pull, and it never trips the breaker.
 
-COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  orient  fork  graduate  verify  board  check  turn-begin  status  help
+COMMANDS  (\`fr help <name>\`):  init  arm  frontier  log  discover  orient  fork  graduate  ingest  verify  board  check  turn-begin  status  help
 CONCEPTS  (\`fr help <topic>\`): workflow  outcomes  breaker  bank-gate  evidence  arms  frontier  discovery  oracles  hooks
 
 The board (injected each turn) is your live FRONTIER + portfolio scoreboard + dead routes.`;
@@ -91,6 +91,16 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   the log) and prints the GraduationToken to seed vibefeld with — a T0 result enters as a clean
   leaf; anything weaker enters ADMITTED (introduces taint; vibefeld must discharge it). fr PREPARES
   the hand-off; it does not run vibefeld.  (docs/research/seam-sketch.md)`,
+
+  ingest: `fr ingest <af-dir>
+  BACKWARD SEAM — REPORT (read-only) the obligations a vibefeld workspace would reopen in fr.
+  Runs \`af status/challenges --format json\` (binary via $FR_AF_BIN, default \`af\`) and maps its
+  derived state back: a refuted node → a ⊘ refutation (a dead-route that sharpens the frontier by
+  elimination); an open critical/major challenge → a gap (a new arm to attack); an admitted/tainted
+  LEAF → a ⟡ taint (a citable discovery), CAPPED at T2 so it can NEVER support a banked/T0 result
+  (trust conservation — nothing crossing back mints trust). This increment PREPARES the hand-off; it
+  writes no records yet (the write path + crack→supersedes credit-assignment loop are the next
+  increment).  (docs/research/seam-sketch.md §2.2)`,
 
   verify: `fr verify <claim> --oracle <name>
   Run a registered oracle (argv, NO shell; claim text on stdin) → a PASS/FAIL verdict, the
