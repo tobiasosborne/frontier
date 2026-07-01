@@ -34,7 +34,7 @@ import { validateLog, validateDiscover, validateOrient, validateFork, validateGr
 import { renderBoard, promptHook, stopPass, stopBlock, stopSoft } from "./board";
 import { runOracle, currentVerdicts } from "./oracle";
 import { readVibefeldState } from "./vibefeld";
-import { ingestResiduals } from "./ingest";
+import { ingestResiduals, newResiduals, residualRef } from "./ingest";
 import { out, err, parseArgs } from "./cliutil";
 import type {
   Portfolio,
@@ -513,11 +513,12 @@ const LANDS_LABEL: Record<string, string> = {
   refuted: "refuted dead-route",
 };
 
-export function cmdIngest(dir: string, rest: string[]): number {
+export function cmdIngest(dir: string, rest: string[], now: string): number {
   const { pos } = parseArgs(rest);
   const afDir = pos[0];
+  const write = rest.includes("--write");
   if (!afDir) {
-    err("usage: fr ingest <af-dir>   (reports the obligations a vibefeld workspace would reopen in fr)");
+    err("usage: fr ingest <af-dir> [--write]   (reports the obligations a vibefeld workspace would reopen in fr)");
     return 1;
   }
   if (!isActive(dir)) {
@@ -540,17 +541,76 @@ export function cmdIngest(dir: string, rest: string[]): number {
     return 0;
   }
 
-  out(`ingest ${afDir} — ${residuals.length} residual(s) vibefeld would reopen in fr (read-only; no records written):`);
+  // This slice implements only the DISCOVERY landing (a `taint` lemma). `gap` (→ arm) and
+  // `refutation` (→ refuted dead-route) are report-only until their landings ship — we write ONLY
+  // the landings we have built. seam-sketch §2.2 / IMPL_PLAN §11.
+  const writable = residuals.filter((t) => t.kind === "taint");
+  const deferred = residuals.filter((t) => t.kind !== "taint");
+
+  // Always list what vibefeld would reopen (both modes), so gaps/refutations stay visible.
+  out(`ingest ${afDir} — ${residuals.length} residual(s) vibefeld would reopen in fr:`);
   for (const t of residuals) {
     const lands = LANDS_LABEL[t.lands] ?? t.lands;
     const cap = t.cap ? `  [cap ${t.cap}]` : "";
     out(`  ${t.kind.padEnd(11)}→ ${lands}${cap}   node ${t.provenance.nodeId}   ${t.statement}`);
   }
+
+  if (!write) {
+    out(
+      `read-only (no records written). Re-run with --write to append the ${writable.length} taint residual(s) as ` +
+        `parked discoveries (gap→arm / refutation→refuted-dead-route landings + the crack→supersedes credit-assignment loop are pending).`,
+    );
+    return 0;
+  }
+
+  // ── --write: append the taint residuals as parked discoveries, IDEMPOTENTLY ──────────────
+  const log = readLog(dir);
+  const existingRefs = new Set(
+    log.map((r) => r.from_vibefeld).filter((x): x is string => x != null),
+  );
+  const fresh = newResiduals(writable, existingRefs);
+
+  let base = log.reduce((m, r) => Math.max(m, r.cycle), 0);
+  for (const t of fresh) {
+    const rec = buildIngestedDiscovery(t, ++base, now);
+    // Defensive: reuse the discovery gate (note + question). Our builder always satisfies it.
+    const v = validateDiscover(rec);
+    if (!v.ok) {
+      err(`ingest: skipped ${residualRef(t)} — ${v.error}`);
+      base -= 1;
+      continue;
+    }
+    appendLog(dir, rec);
+  }
+
+  const skipped = writable.length - fresh.length;
   out(
-    "next: the WRITE path (append these as arms / discoveries / refuted records, hash-bound for " +
-      "idempotent re-ingest) + the crack→supersedes credit-assignment loop land in the next increment.",
+    `ingest --write: ${fresh.length} written · ${skipped} skipped (already ingested) · ` +
+      `${deferred.length} report-only (gap/refutation landings pending).`,
   );
   return 0;
+}
+
+/** A parked discovery seeded by a vibefeld TAINT residual (off-arm, T2-capped, provenance-stamped). */
+function buildIngestedDiscovery(t: ReturnType<typeof ingestResiduals>[number], cycle: number, now: string): LogRecord {
+  return {
+    ts: now,
+    cycle,
+    arm: null, // OFF-ARM — breaker-neutral, exactly like a hand-logged discovery
+    target: null,
+    outcome: "discovery",
+    at: null,
+    note: `${t.statement} [vibefeld ${t.provenance.nodeId}]`,
+    question: `admitted/tainted vibefeld lemma (capped at ${t.cap ?? "T2"}) — can it be discharged, or does it cite into a live arm?`,
+    evidence: { class: "af", tier: t.cap ?? "T2", artifact: `vibefeld:${t.provenance.nodeId}`, verdict: "claimed" },
+    workers: [],
+    p_true: null,
+    p_audit: null,
+    decision: null,
+    frontier_after: null,
+    supersedes: null,
+    from_vibefeld: residualRef(t),
+  };
 }
 
 // ── verify (the bank gate's only execution path) ───────────────────────────────

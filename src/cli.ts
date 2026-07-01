@@ -50,7 +50,7 @@ export function run(argv: string[], now: string): number {
     case "graduate":
       return cmdGraduate(dir, rest, now);
     case "ingest":
-      return cmdIngest(dir, rest);
+      return cmdIngest(dir, rest, now);
     case "verify":
       return cmdVerify(dir, rest, now);
     case "board":

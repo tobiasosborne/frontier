@@ -92,15 +92,18 @@ fr arm set <id> [--priority P] [--target "<open>"] [--kill "<criterion>"]
   leaf; anything weaker enters ADMITTED (introduces taint; vibefeld must discharge it). fr PREPARES
   the hand-off; it does not run vibefeld.  (docs/research/seam-sketch.md)`,
 
-  ingest: `fr ingest <af-dir>
-  BACKWARD SEAM — REPORT (read-only) the obligations a vibefeld workspace would reopen in fr.
-  Runs \`af status/challenges --format json\` (binary via $FR_AF_BIN, default \`af\`) and maps its
-  derived state back: a refuted node → a ⊘ refutation (a dead-route that sharpens the frontier by
-  elimination); an open critical/major challenge → a gap (a new arm to attack); an admitted/tainted
-  LEAF → a ⟡ taint (a citable discovery), CAPPED at T2 so it can NEVER support a banked/T0 result
-  (trust conservation — nothing crossing back mints trust). This increment PREPARES the hand-off; it
-  writes no records yet (the write path + crack→supersedes credit-assignment loop are the next
-  increment).  (docs/research/seam-sketch.md §2.2)`,
+  ingest: `fr ingest <af-dir> [--write]
+  BACKWARD SEAM — REPORT the obligations a vibefeld workspace would reopen in fr (and, with --write,
+  append the ones whose landing is built). Runs \`af status/challenges --format json\` (binary via
+  $FR_AF_BIN, default \`af\`) and maps its derived state back: a refuted node → a ⊘ refutation (a
+  dead-route that sharpens the frontier by elimination); an open critical/major challenge → a gap (a
+  new arm to attack); an admitted/tainted LEAF → a ⟡ taint (a citable discovery), CAPPED at T2 so it
+  can NEVER support a banked/T0 result (trust conservation — nothing crossing back mints trust).
+  Without --write it is read-only. With --write it appends each TAINT residual as a parked discovery
+  (off-arm, T2-capped, stamped from_vibefeld for IDEMPOTENT re-ingest — a re-run writes nothing until
+  the vibefeld node's content changes); promote one with \`fr arm add --from-discovery\`. gap→arm,
+  refutation→refuted-dead-route, and the crack→supersedes credit-assignment loop are pending — those
+  kinds stay report-only.  (docs/research/seam-sketch.md §2.2)`,
 
   verify: `fr verify <claim> --oracle <name>
   Run a registered oracle (argv, NO shell; claim text on stdin) → a PASS/FAIL verdict, the

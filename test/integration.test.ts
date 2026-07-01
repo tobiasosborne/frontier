@@ -520,4 +520,45 @@ describe("backward seam: fr ingest (read-only parser)", () => {
     const r = frWithAf("/nonexistent/af", "ingest", "/some/af/dir");
     expect(r.code).toBe(1);
   });
+
+  /** Records currently in the log (empty array if none written yet). */
+  function logRecords(): Array<{ outcome: string; from_vibefeld?: string; note: string }> {
+    const f = path.join(frontierDir, "log.jsonl");
+    if (!fs.existsSync(f)) return [];
+    return fs.readFileSync(f, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  }
+
+  test("--write appends a discovery for the TAINT node only; gap/refutation stay report-only", () => {
+    init();
+    const bin = fakeAf(SICK_STATUS, SICK_CHALLENGES);
+    const r = frWithAf(bin, "ingest", "/some/af/dir", "--write");
+    expect(r.code).toBe(0);
+    expect(r.stdout).toMatch(/wrote 1|1 written/i);
+
+    const recs = logRecords();
+    const written = recs.filter((x) => x.from_vibefeld);
+    expect(written).toHaveLength(1); // ONLY the taint (1.3); gap + refutation are not written
+    expect(written[0]!.outcome).toBe("discovery");
+    expect(written[0]!.note).toContain("admitted on faith");
+
+    // the taint discovery is parked and visible on the board.
+    expect(fr("board").stdout).toContain("admitted on faith");
+  });
+
+  test("--write is idempotent: a second run writes nothing (same content)", () => {
+    init();
+    const bin = fakeAf(SICK_STATUS, SICK_CHALLENGES);
+    frWithAf(bin, "ingest", "/some/af/dir", "--write");
+    const afterFirst = logRecords().length;
+    const r2 = frWithAf(bin, "ingest", "/some/af/dir", "--write");
+    expect(r2.stdout).toMatch(/0 written|already ingested|skipped 1|nothing new/i);
+    expect(logRecords().length).toBe(afterFirst); // no duplicate
+  });
+
+  test("without --write nothing is appended (read-only default preserved)", () => {
+    init();
+    const bin = fakeAf(SICK_STATUS, SICK_CHALLENGES);
+    frWithAf(bin, "ingest", "/some/af/dir");
+    expect(fs.existsSync(path.join(frontierDir, "log.jsonl"))).toBe(false);
+  });
 });

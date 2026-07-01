@@ -111,6 +111,12 @@ export interface LogRecord {
   graduates?: number;
   /** the vibefeld root-obligation ref a result was graduated INTO — set on the graduate marker. seam-sketch §2.1. */
   graduated_to?: string;
+  /**
+   * The vibefeld node/challenge ref this record was seeded BY (`fr ingest --write`). Backward-seam
+   * provenance AND the idempotency key: a re-ingest whose `residualRef` already appears here is
+   * skipped; a changed node (new contentHash → new ref) re-ingests. seam-sketch §2.2/§6.
+   */
+  from_vibefeld?: string;
 }
 
 export interface ArmConfig {

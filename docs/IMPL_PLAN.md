@@ -330,12 +330,13 @@ breaker-neutral) and is **not a turn-ender** (G1 counts arm-pulls only; `isPull`
 | `board.test.ts` | renders `GRADUATED → vibefeld: ×N` with the clean/admitted split; no line when none |
 | `integration.test.ts` | `fr graduate <c> --to <ref>` appends the marker, prints the token (`↟`), surfaces `GRADUATED` on the board; a bad cycle is rejected (exit 1) |
 
-## 11. Seam — backward `ingest` parser (increment 1, read-only, BUILT)
+## 11. Seam — backward `ingest` (BUILT: read-only parser + write slice 1)
 
-Spec: `docs/research/seam-sketch.md` §2.2/§3/§6 (the BACKWARD half of the fr⇄vibefeld seam). Scope this
-increment: **REPORT** the fr obligations a vibefeld workspace would reopen — the READER, not the WRITER.
-**No** record writes, **no** hash-bound re-ingest idempotency, **no** `crack→supersedes` credit-assignment
-loop (those are the next increment). Same "prepares, does not launch" posture as `fork` / `graduate`.
+Spec: `docs/research/seam-sketch.md` §2.2/§3/§6 (the BACKWARD half of the fr⇄vibefeld seam). Built in
+slices: **(a) the read-only parser** — REPORT the fr obligations a vibefeld workspace would reopen; and
+**(b) write slice 1** — `fr ingest <af-dir> --write` idempotently appends the TAINT residuals as parked
+discoveries. Still pending: the `gap→arm` and `refutation→refuted-dead-route` landings, and the
+`crack→supersedes` credit-assignment loop. Same "prepares, does not launch" posture as `fork` / `graduate`.
 
 **vibefeld as an oracle of a richer return type** (seam-sketch §0): `fr ingest` runs `af status/challenges
 --format json` and scrubs the derived state into `ResidualToken`s — the structured sibling of `fr verify`'s
@@ -359,19 +360,33 @@ An admitted node is caught by `epistemic === "admitted"` even when its per-node 
 (`gap|taint|refutation`; `crack` deferred) · `ResidualLanding` · `ResidualToken { kind, statement, lands,
 provenance{afDir,nodeId,challengeId,contentHash}, cap: Tier|null }`.
 
+**Write slice 1 — `fr ingest --write` idempotently appends the TAINT residuals.** `--write` is opt-in
+(bare `fr ingest` stays read-only). This slice implements ONLY the `discovery` landing (a `taint` lemma) —
+we write only the landings we have built; `gap` (→arm) and `refutation` (→refuted) stay report-only. Each
+`taint` becomes an off-arm `discovery` record (arm:null, breaker-neutral, `evidence.tier = cap = T2`,
+`artifact = vibefeld:<nodeId>`), reusing the discovery ledger wholesale — it surfaces as a PARKED discovery,
+promotable via `fr arm add --from-discovery` (Rung 2). **Idempotency:** each record carries
+`from_vibefeld = residualRef(token) = <nodeId>#<challengeId|kind>@<contentHash>`; a re-ingest whose ref is
+already in the log is skipped, and a CHANGED node (new contentHash → new ref) re-ingests — the lightweight
+twin of `oracle.currentVerdicts`'s hash-bound staleness.
+
+**Types (added this slice):** `LogRecord.from_vibefeld?: string` (inert provenance + the idempotency key).
+
 **Module touches:**
 - **`ingest.ts`** (NEW, PURE) — `ingestResiduals(state) → ResidualToken[]`: the classifier + `taint→cap`
-  conservation. No fs/clock/env.
+  conservation. Plus `residualRef(token)` (the content-bound key) + `newResiduals(tokens, existingRefs)`
+  (the dedupe filter). No fs/clock/env.
 - **`vibefeld.ts`** (NEW, IMPURE edge) — `readVibefeldState(afDir)` spawns `af` (binary via `$FR_AF_BIN`,
   default `af`); pure `parseVibefeldState(statusJSON, challengesJSON, afDir)` maps the JSON → `VibefeldState`
   (degrades to empty on garbage, never throws). A broken/absent `af` is reported, never swallowed (an empty
   report must mean "clean proof", not "af failed").
-- **`commands.ts`/`cli.ts`** — `ingest <af-dir>`: read → classify → print the report + a "no records written"
-  note. Requires an active `.frontier/`; missing af-dir or a failing `af` → exit 1.
-- **`help.ts`** — `ingest` topic + command-surface entry.
+- **`commands.ts`/`cli.ts`** — `ingest <af-dir> [--write]`: read → classify → report; with `--write`, filter
+  to fresh taint residuals via `newResiduals` and append a `buildIngestedDiscovery` per one (validated
+  through `validateDiscover`). Requires an active `.frontier/`; missing af-dir or a failing `af` → exit 1.
+- **`help.ts`** — `ingest` topic (incl. `--write`) + command-surface entry.
 
 | Test file | Asserts (ingest) |
 |---|---|
-| `ingest.test.ts` | refuted→refutation(null); open crit/major→gap(null), minor/resolved→none; admitted/tainted LEAF→taint(**T2**), interior→none, clean/unresolved→none; refuted precedence; the never-upgrade invariant (every `cap ∈ {T2,null}`, never T0); determinism |
+| `ingest.test.ts` | refuted→refutation(null); open crit/major→gap(null), minor/resolved→none; admitted/tainted LEAF→taint(**T2**), interior→none, clean/unresolved→none; refuted precedence; the never-upgrade invariant (every `cap ∈ {T2,null}`, never T0); determinism. Write slice: `residualRef` binds nodeId+challenge+**contentHash** (a changed node → new ref → re-ingests); `newResiduals` drops already-ingested refs (re-ingest of an unchanged set is a no-op) |
 | `vibefeld.test.ts` | `parseVibefeldState` maps af field names + derives `isLeaf` from the id tree; a healthy proof → 0 residuals, a sick proof → gap+refutation+taint; empty JSON degrades, never throws |
-| `integration.test.ts` | `fr ingest <af-dir>` (fake `af` via `$FR_AF_BIN`) reports the 3 kinds + `[cap T2]` + "no records written" and writes NO log; a healthy proof → 0 residuals; missing arg → exit 1; a failing/absent `af` → exit 1 |
+| `integration.test.ts` | `fr ingest <af-dir>` (fake `af` via `$FR_AF_BIN`) reports the 3 kinds + `[cap T2]` + "no records written" and writes NO log; a healthy proof → 0 residuals; missing arg → exit 1; a failing/absent `af` → exit 1. `--write` appends a discovery for the TAINT node only (gap/refutation stay report-only), is idempotent on re-run (0 written, no duplicate), and bare `fr ingest` still writes nothing |

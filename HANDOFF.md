@@ -1,8 +1,9 @@
 # HANDOFF — `frontier` (`fr`)
 
 > **Status:** MVP **complete, green, dogfood-validated**; the **discovery ledger + fork** (D1–D3), the
-> **forward graduation marker**, and the **backward `ingest` read-only parser** are **built and green** on
-> top. Last session: 2026-07-01 (backward seam — read-only ingest parser, IMPL_PLAN §11).
+> **forward graduation marker**, and the **backward `ingest`** (read-only parser + write slice 1:
+> `--write` appends taint residuals idempotently) are **built and green** on top. Last session:
+> 2026-07-01 (backward seam — ingest read-only parser + write slice 1, IMPL_PLAN §11).
 > **Read order for a new agent:** this file → `CLAUDE.md` (the Laws) → `docs/prd.md` (WHAT) →
 > `docs/IMPL_PLAN.md` (module APIs) → `src/types.ts` (the contract). Then `bun test` and skim `src/derive.ts`.
 
@@ -22,23 +23,30 @@ frontier-stall breaker is respected. Everything else is light ceremony (`fr log`
 
 ## 1. Current state
 
-- **221 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
-  board ≈38 ms / check ≈38 ms (50 ms budget — verify on a QUIET machine; under load even pristine `main`
+- **229 tests pass / 0 fail** (`bun test`), `tsc --noEmit` clean, `bun run build` → `dist/fr`, `bun run latency`
+  board ≈41 ms / check ≈40 ms (50 ms budget — verify on a QUIET machine; under load even pristine `main`
   measures ~56 ms, so a failing gate mid-session is contention, not a regression). **`fr` installed globally**
   at `~/.local/bin/fr` (on PATH; the global binary predates `fr ingest` — rebuild with `bun run install:global`).
-- **Backward fr⇄vibefeld seam — read-only `ingest` parser (built 2026-07-01 — seam-sketch §2.2/§3/§6,
-  IMPL_PLAN §11).** `fr ingest <af-dir>` runs `af` as *an oracle of a richer return type* (`af status/
+- **Backward fr⇄vibefeld seam — `ingest` read-only parser + write slice 1 (built 2026-07-01 — seam-sketch
+  §2.2/§3/§6, IMPL_PLAN §11).** `fr ingest <af-dir>` runs `af` as *an oracle of a richer return type* (`af status/
   challenges --format json`, binary via `$FR_AF_BIN`) and maps its derived state BACK into fr obligations:
   a `refuted` node → a `refutation` (a dead-route that sharpens the frontier by elimination); an OPEN
   critical/major challenge → a `gap` (a new arm); an `admitted`/`tainted` **leaf** → a `taint` (a citable
   discovery) **capped at T2** so it can NEVER support a banked/T0 result — the never-upgrade `taint→cap`
-  conservation, the §8 trust-upgrade hole closed. It **REPORTS only** (writes no records — the READER, not
-  the WRITER; same posture as `fork`/`graduate`). PURE classifier `ingest.ts`; impure edge `vibefeld.ts`
+  conservation, the §8 trust-upgrade hole closed. PURE classifier `ingest.ts`; impure edge `vibefeld.ts`
   (with a pure `parseVibefeldState` inside). **Validated end-to-end against the real `../vibefeld/af`
   binary** (a clean proof → 0 residuals; a refute+admit workspace → refutation+taint). Subtlety: an admitted
   node is caught by `epistemic === "admitted"` even when its per-node `taint_state` reads `unresolved` (a
-  pending ancestor) — `taint_state` alone would miss it. **Deferred to the next increment:** the WRITE path,
-  hash-bound idempotent re-ingest, and the `crack → supersedes` credit-assignment loop (see §5).
+  pending ancestor) — `taint_state` alone would miss it.
+  **Write slice 1:** `fr ingest <af-dir> --write` (opt-in; bare `fr ingest` stays read-only) idempotently
+  appends each TAINT residual as a **parked discovery** (off-arm, breaker-neutral, `evidence.tier = cap = T2`,
+  `artifact = vibefeld:<nodeId>`), reusing the discovery ledger — promotable via `fr arm add --from-discovery`.
+  **Idempotency:** each record carries `from_vibefeld = residualRef = <nodeId>#<challenge|kind>@<contentHash>`;
+  a re-run whose ref is already logged is skipped, and a CHANGED node (new contentHash → new ref) re-ingests —
+  the lightweight `oracle.currentVerdicts` twin (pure `residualRef` + `newResiduals`). `gap`/`refutation` are
+  printed but **report-only** (we write only the landings we've built). Verified live: `--write` wrote 1 taint
+  discovery, a second run wrote 0 (skipped), the board shows the parked discovery. **Deferred (see §5):** the
+  `gap→arm` and `refutation→refuted-dead-route` landings + the `crack → supersedes` credit-assignment loop.
 - **Forward fr⇄vibefeld seam (built earlier — `docs/research/seam-sketch.md`, IMPL_PLAN §10).**
   `vibefeld`/`af` (`../vibefeld`) is the *already-built* contract-carrying adversarial proof DAG (event-sourced
   ledger, per-node verifier, `gap`/`completeness` challenges, `taint`, lemma-extraction); `fr` is the upstream
@@ -148,16 +156,20 @@ nudges the next step. Source: `src/help.ts`.
 
 ## 5. What's NOT done (pick up here)
 
-- **Seam BACKWARD half — the WRITE path (the next increment).** The read-only `ingest` parser now ships
-  (§1; it REPORTS `ResidualToken`s but writes nothing). What remains: (a) **append** the tokens as real records
-  — a `gap` → a fresh arm (`--target`) or discovery; a `taint` → a discovery carrying the T2 `cap`; a
-  `refutation` → a `refuted` dead-route; (b) **hash-binding for idempotent re-ingest** — bind each token to
-  `(afLedgerHash, nodeId, contentHash)` and drop already-ingested ones at the edge, verbatim the
-  `oracle.currentVerdicts` staleness discipline (so re-running `fr ingest` is a no-op until vibefeld changes);
-  (c) the **`crack → supersedes` credit-assignment loop** — the deferred `crack` kind: a critical gap in a node
-  `fr` had **banked** writes a record with `supersedes: <banking-cycle>`, re-opening the frontier via the
-  existing `derive.isLive` path (the only sound place for `fr`'s intermediate reward; seam-sketch §2.2/§4).
-  Wire `readVibefeldState`/`ingest.ts` into an appending `cmdIngest` (mirror `cmdFork`'s marker-writing).
+- **Seam BACKWARD half — the remaining WRITE landings (the next increments).** The read-only parser AND
+  write slice 1 now ship (§1): `fr ingest --write` appends the `taint` residuals as idempotent parked
+  discoveries (`from_vibefeld = <nodeId>#<challenge|kind>@<contentHash>` keys the dedupe). What remains:
+  (a) **`gap → arm`** — an open critical/major challenge appends/updates a portfolio arm with
+  `ArmConfig.from_vibefeld` set (`--target = the gap`); portfolio-mutating, so decide arm-id derivation +
+  the same idempotency key; (b) **`refutation → refuted dead-route`** — needs a derive tweak so an *off-arm*
+  `refuted` record (arm:null) joins the `deadRoutes` ledger (today `derive` skips `arm == null` there), or a
+  synthetic arm to hang it on; (c) the **`crack → supersedes` credit-assignment loop** — the deferred `crack`
+  kind: a critical gap in a node `fr` had **banked** writes a record with `supersedes: <banking-cycle>`,
+  re-opening the frontier via the existing `derive.isLive` path (the only sound place for `fr`'s intermediate
+  reward; seam-sketch §2.2/§4) — needs the cross-ledger join (match a vibefeld node back to the fr banked
+  cycle it graduated from, via the forward `graduated_to` markers). Extend `residualRef` to hash the
+  challenge text too (today a re-worded challenge on an unchanged node won't re-ingest). `buildIngestedDiscovery`
+  in `commands.ts` is the pattern to mirror for the arm/refuted builders.
   **Also deferred** (separate, more invasive): the statability-tightening of the log gate — every non-null pull
   names a *falsifiable* post-state, generalizing `died-at`'s G5 discipline (seam-sketch §9).
   Decided AGAINST: a shared `fr`/`vibefeld` ledger (TJO: too complex for the goal).

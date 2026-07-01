@@ -25,6 +25,22 @@ function isTaintedLeaf(n: VibefeldNode): boolean {
   return n.epistemic === "admitted" || n.taint === "self_admitted" || n.taint === "tainted";
 }
 
+/**
+ * The content-bound provenance key for a residual — stamped on the ingested record as
+ * `from_vibefeld` and used to dedupe re-ingest. Binds nodeId + challenge + the node's contentHash,
+ * so an UNCHANGED node dedupes (same ref) while a CHANGED one re-ingests (new hash → new ref) —
+ * the same "hash-bound, stale-on-change" discipline as a Verdict. seam-sketch §6.
+ */
+export function residualRef(t: ResidualToken): string {
+  const { nodeId, challengeId, contentHash } = t.provenance;
+  return `${nodeId}#${challengeId ?? t.kind}@${contentHash}`;
+}
+
+/** Keep only tokens NOT already ingested (whose `residualRef` is absent from `existingRefs`). PURE. */
+export function newResiduals(tokens: ResidualToken[], existingRefs: Set<string>): ResidualToken[] {
+  return tokens.filter((t) => !existingRefs.has(residualRef(t)));
+}
+
 export function ingestResiduals(state: VibefeldState): ResidualToken[] {
   const { afDir, nodes, challenges } = state;
   const tokens: ResidualToken[] = [];

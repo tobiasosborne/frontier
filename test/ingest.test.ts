@@ -6,8 +6,8 @@
  * taint caps at T2, and NO branch ever yields banked/T0 (the §8 trust-upgrade hole).
  */
 import { test, expect, describe } from "bun:test";
-import { ingestResiduals } from "../src/ingest.ts";
-import type { VibefeldState, VibefeldNode, VibefeldChallenge } from "../src/types.ts";
+import { ingestResiduals, residualRef, newResiduals } from "../src/ingest.ts";
+import type { ResidualToken, VibefeldState, VibefeldNode, VibefeldChallenge } from "../src/types.ts";
 
 // ── fixture builders (shape captured from real `af status/challenges --format json`) ──
 function node(over: Partial<VibefeldNode> = {}): VibefeldNode {
@@ -163,5 +163,53 @@ describe("ingestResiduals — the never-upgrade invariant", () => {
       nodes: [node({ id: "1", epistemic: "refuted" }), node({ id: "2", epistemic: "admitted", taint: "self_admitted" })],
     });
     expect(ingestResiduals(s)).toEqual(ingestResiduals(s));
+  });
+});
+
+// ── idempotency: residualRef (the provenance key) + newResiduals (the filter) ──
+function token(over: Partial<ResidualToken> = {}): ResidualToken {
+  return {
+    kind: "taint",
+    statement: "s",
+    lands: "discovery",
+    provenance: { afDir: "/p", nodeId: "1.3", challengeId: null, contentHash: "hc" },
+    cap: "T2",
+    ...over,
+  };
+}
+
+describe("residualRef — the content-bound idempotency key", () => {
+  test("binds nodeId + challengeId + contentHash (a taint keys on its node)", () => {
+    const r = residualRef(token({ provenance: { afDir: "/p", nodeId: "1.3", challengeId: null, contentHash: "abc" } }));
+    expect(r).toContain("1.3");
+    expect(r).toContain("abc");
+  });
+
+  test("a gap on the same node but a DIFFERENT challenge gets a DISTINCT ref", () => {
+    const a = residualRef(token({ kind: "gap", provenance: { afDir: "/p", nodeId: "1", challengeId: "ch-a", contentHash: "h" } }));
+    const b = residualRef(token({ kind: "gap", provenance: { afDir: "/p", nodeId: "1", challengeId: "ch-b", contentHash: "h" } }));
+    expect(a).not.toBe(b);
+  });
+
+  test("a CHANGED node (new contentHash) gets a NEW ref → it will re-ingest, not dedupe", () => {
+    const before = residualRef(token({ provenance: { afDir: "/p", nodeId: "1.3", challengeId: null, contentHash: "h1" } }));
+    const after = residualRef(token({ provenance: { afDir: "/p", nodeId: "1.3", challengeId: null, contentHash: "h2" } }));
+    expect(before).not.toBe(after);
+  });
+});
+
+describe("newResiduals — drops already-ingested tokens", () => {
+  test("keeps only tokens whose ref is not among the existing from_vibefeld refs", () => {
+    const t1 = token({ provenance: { afDir: "/p", nodeId: "1.3", challengeId: null, contentHash: "h1" } });
+    const t2 = token({ provenance: { afDir: "/p", nodeId: "1.4", challengeId: null, contentHash: "h2" } });
+    const existing = new Set([residualRef(t1)]);
+    expect(newResiduals([t1, t2], existing)).toEqual([t2]);
+  });
+
+  test("re-ingest of an unchanged set is a no-op (all refs already present)", () => {
+    const t1 = token();
+    const t2 = token({ kind: "gap", provenance: { afDir: "/p", nodeId: "1", challengeId: "ch", contentHash: "h" } });
+    const existing = new Set([t1, t2].map(residualRef));
+    expect(newResiduals([t1, t2], existing)).toEqual([]);
   });
 });
